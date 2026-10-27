@@ -74,6 +74,8 @@ def classify(sh) -> str:
         return "smartart"
     if sh.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE:
         return "autoshapes"
+    if "FREEFORM" in str(sh.shape_type):
+        return "freeforms"  # 手画线/波浪线常以 freeform 存在（教训#16）
     if sh.shape_type == MSO_SHAPE_TYPE.TEXT_BOX:
         return "textboxes"
     return "others"
@@ -100,10 +102,16 @@ def shape_text(sh) -> tuple[str, list]:
             except Exception:
                 color = None
             bold = r.font.bold is True
-            if color or bold:
+            # 文字级下划线（u= 属性，含 sng/wavy/dbl）：老师划重点的两种形态之一（教训#16）
+            u_attr = None
+            rPr = r._r.find("{http://schemas.openxmlformats.org/drawingml/2006/main}rPr")
+            if rPr is not None and rPr.get("u"):
+                u_attr = rPr.get("u")
+            if color or bold or u_attr:
                 emph.append({"text": r.text.strip(),
                              "color": f"#{color}" if color else None,
-                             "bold": bold})
+                             "bold": bold,
+                             "underline": u_attr})
     return "\n".join(lines), emph
 
 
@@ -136,16 +144,27 @@ def guess_role(idx, total, title, texts, code_lines, chars_total) -> str:
 
 def extract_page(slide, idx, total) -> tuple[str, dict]:
     counts = dict(autoshapes=0, connectors=0, pictures=0, charts=0,
-                  tables=0, textboxes=0, groups=0, smartart=0, others=0)
+                  tables=0, textboxes=0, groups=0, smartart=0, freeforms=0, others=0)
     texts: list[str] = []
     tables_md: list[str] = []
     emphasis: list[dict] = []
+    line_marks: list[dict] = []  # 手画线（含细长自动形状）：位置即强调位置（教训#16）
     for kind, sh in walk_shapes(slide.shapes):
         if kind == "group":
             counts["groups"] += 1
             continue
         cls = classify(sh)
         counts[cls] += 1
+        # 细长形状 = 手画线标记（下划线/波浪线以独立形状存在）：位置供初稿重现
+        try:
+            w, h = sh.width or 0, sh.height or 0
+            if (h <= 127000 and w >= 762000) or (w <= 127000 and h >= 762000):
+                # ≤4px 粗且 ≥30px 长（EMU：12700/px）
+                line_marks.append({"x": round(sh.left / 12700), "y": round(sh.top / 12700),
+                                   "w": round(w / 12700), "h": round(h / 12700),
+                                   "kind": cls})
+        except Exception:
+            pass
         txt, emph = shape_text(sh)
         if txt:
             texts.append(txt)
@@ -182,8 +201,10 @@ def extract_page(slide, idx, total) -> tuple[str, dict]:
         # 最终裁决永远是用户在工作台点的
         "suggest": "redraw" if diagram_like else "pass",
         "counts": {**counts, "text_chars": chars},
-        # 原文强调（颜色/加粗）：初稿生成时按模板强调语汇重现，语义不许丢
+        # 原文强调（颜色/加粗/文字级下划线）：初稿按模板强调语汇重现，语义不许丢
         "emphasis": emphasis[:30],
+        # 手画线（下划线/波浪线以独立形状存在）：原页坐标位置，初稿按模板强调语汇重现
+        "line_marks": line_marks[:20],
         "hidden": slide._element.get("show") == "0",  # python-pptx 不暴露隐藏位，读 XML 属性
     }
 
