@@ -45,7 +45,7 @@ metadata:
 4. **初稿生成**（agent 手写 SVG，方言=引擎扁平页契约，关键规则）：
    - 先读审美库 `type: template` 选篇（palette tokens+纪律）+ 图形页兼读 `diagram-recipe`；目标字体用本机已装（如 Microsoft YaHei）
    - 每页写 `pages/NNN/draft.svg`：viewBox 按画幅（16:9=0 0 1280 720）；根 svg 带 `lang="zh-CN"` + `data-pptx-page-role`（diagram→content）+ 公共 `font-family`；背景全幅 rect 带 id+`data-pptx-role="background"`；**每个语义组 `<g id>` + `data-pptx-bounds` 且互不重叠**（标题独立成组）；每逻辑段一个 `<text>`，续行用定位 tspan（复读 x + 正 dy），行内强调用非定位 tspan；色全大写 #RRGGBB；箭头走 marker 三角契约；`&<>` 必须 XML 转义，**缩进用 NBSP**（普通空格会被吞）
-   - 图形页重绘：具备视觉的 agent 看 `original.png` 重画；无视觉会话诚实降级为按 text/meta 构造并在 meta 标注待复核
+   - 图形页重绘：**必须由具备视觉的 agent 看 `original.png` 后重画，拓扑保真是硬约束**（原图的形状/连线/层级逻辑不许改，只换视觉语言）；无视觉会话**禁止猜画**，图形页初稿一律降级为"保留原样"：贴原图 `../images/pNNN_original.png`（等比缩放入画幅，加白底），待有视觉会话再重绘
    - 试稿机制：先 ≤10 页定调，确认后续出剩余
 5. **工作台审核**（M3+）：双面板（左原图/右新稿），裁决三选一（保留原样=保底贴图/通过/重绘），★回看旗标，批量裁决，意见框异步流水线，✦AI美化选中——UX 基准见 PLAN §2.3A；M3 之前用聊天裁决（说"P5 通过"即写 verdict.json）
 6. **循环消化**：`pending_requests.jsonl` 队列（意见框与聊天双入口单队列），改完横幅提醒

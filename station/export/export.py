@@ -77,6 +77,24 @@ def main() -> int:
         shutil.copyfile(d, dst)
         print(f"  staged {dst.name}")
 
+    # 图片资源搬运：draft 里 href="../images/pNNN_original.png" 约定指向
+    # 本任务 pages/NNN/original.png（保留原样的贴图实现）；其他名字找 task/images/
+    import re as _re
+    refs = set()
+    for svg in (stage / "svg_output").glob("*.svg"):
+        refs |= set(_re.findall(r'href="\.\./images/([^"]+)"', svg.read_text(encoding="utf-8")))
+    for name in sorted(refs):
+        m = _re.fullmatch(r"p(\d+)_original\.(png|jpg)", name)
+        src_img = (pages_dir / f"{int(m.group(1)):03d}" / f"original.{m.group(2)}") if m else None
+        if src_img is None or not src_img.exists():
+            src_img = task_dir / "images" / name  # 兼容以后任务自带素材图
+        if src_img.exists():
+            (stage / "images").mkdir(exist_ok=True)
+            shutil.copyfile(src_img, stage / "images" / name)
+            print(f"  staged 图片 {name}")
+        else:
+            print(f"⚠ 图片缺引用源：{name}（导出可能失败）")
+
     print("▶ 质检 svg_quality_checker …")
     chk = run_engine("svg_quality_checker.py",
                      [stage, "--quick-generate", "--canonical-authoring",
