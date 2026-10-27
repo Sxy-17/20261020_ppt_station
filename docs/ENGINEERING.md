@@ -64,3 +64,5 @@
 | 20 | 1028 | server.py ROOT=parents[2] 多爬一层（station/ 比 prep/ 浅一级）→ 500；重启时旧进程没杀干净，两个服务同听 7610 互相干扰（Windows 允许双听） | 目录深度按文件实际层级算；重启前先按 PID 清端口 | R21：路径锚点写文件头注释；杀服务按 netstat PID 点名 |
 
 | 21 | 1028 | api_templates 正则字面量含裸引号 → SyntaxError 服务起不来（冒烟 000 才发现） | 双引号串里再写引号必须转义或换单引号包裹 | 冒烟先看 server.log 再猜；正则一律用 r'...' 单引号风格 |
+
+| 22 | 1028 | 冒烟时 curl -d 带中文经 git-bash 变 GBK → Flask get_json 400，误以为服务端 bug | 测试体经 shell 会换编码；服务端未必错 | 冒烟用 ASCII 体或 --data-binary @file；先看原始响应再下结论 |

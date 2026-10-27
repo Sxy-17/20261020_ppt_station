@@ -66,6 +66,7 @@ async function render(idx) {
 
   const done = state.pages.filter((x) => x.verdict).length;
   $("progress").textContent = `${done}/${state.pages.length} 已裁决`;
+  refreshPendingCount();
 }
 
 // ---------- 裁决写入 ----------
@@ -111,6 +112,38 @@ document.addEventListener("keydown", (e) => {
     setVerdict(p.verdict, { star: !p.star });
   }
 });
+
+// ---------- 意见框（M3.5a）：提交进队列，翻页不等待 ----------
+async function sendOpinion() {
+  const input = $("opinion-input");
+  const text = input.value.trim();
+  if (!text) return;
+  const p = state.pages[state.cur];
+  const res = await fetch(`/api/task/${state.task}/page/${p.page}/request`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const data = await res.json();
+  if (!data.ok) { alert(data.error || "提交失败"); return; }
+  input.value = "";
+  refreshPendingCount();
+}
+$("opinion-send").onclick = sendOpinion;
+$("opinion-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendOpinion();
+  e.stopPropagation();   // 别触发翻页/裁决快捷键
+});
+
+// 当前页待消化计数（挂在 page-meta 后面）
+async function refreshPendingCount() {
+  const reqs = await (await fetch(`/api/task/${state.task}/requests`)).json();
+  const p = state.pages[state.cur];
+  const n = reqs.filter((r) => r.page === p.page && r.status === "queued").length;
+  const done = reqs.filter((r) => r.page === p.page && r.status === "done").length;
+  $("page-meta").dataset.pending = n ? `待消化 ${n}` : "";
+  $("page-meta").dataset.done = done ? `已消化 ${done}` : "";
+}
+window.refreshPendingCount = refreshPendingCount;
 
 // ---------- 批量裁决后刷新（overview.js 派发） ----------
 document.addEventListener("pages-updated", () => { buildPageSelect(); render(state.cur); });

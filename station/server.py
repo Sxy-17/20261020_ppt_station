@@ -247,6 +247,75 @@ def api_selection(name: str):
     return jsonify({"ok": True, **sel})
 
 
+REQ_FILE = "pending_requests.jsonl"
+
+
+def read_requests(d: Path) -> list[dict]:
+    """读意见队列（坏行跳过不炸）"""
+    f = d / REQ_FILE
+    if not f.exists():
+        return []
+    out = []
+    for ln in f.read_text(encoding="utf-8").splitlines():
+        try:
+            out.append(json.loads(ln))
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+def write_requests(d: Path, reqs: list[dict]):
+    with open(d / REQ_FILE, "w", encoding="utf-8") as f:
+        for r in reqs:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+@app.post("/api/task/<name>/page/<int:n>/request")
+def api_add_request(name: str, n: int):
+    """意见入队（M3.5a）：与聊天同一队列（双入口单队列）"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    body = request.get_json(force=True)
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "意见为空"}), 400
+    req = {"ts": datetime.now().isoformat(timespec="seconds"),
+           "page": n, "text": text[:500], "status": "queued"}
+    with open(d / REQ_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(req, ensure_ascii=False) + "\n")
+    return jsonify({"ok": True, **req})
+
+
+@app.get("/api/task/<name>/requests")
+def api_requests(name: str):
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    return jsonify(read_requests(d))
+
+
+@app.post("/api/task/<name>/requests/update")
+def api_update_request(name: str):
+    """状态更新（agent 消化完回写 done；也允许撤销 queued）"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    body = request.get_json(force=True)
+    ts, status = body.get("ts"), body.get("status", "done")
+    reqs = read_requests(d)
+    hit = 0
+    for r in reqs:
+        if r.get("ts") == ts:
+            r["status"] = status
+            r["done_ts"] = datetime.now().isoformat(timespec="seconds")
+            hit += 1
+    if not hit:
+        return jsonify({"error": "未找到该条"}), 404
+    write_requests(d, reqs)
+    return jsonify({"ok": True, "updated": hit})
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=7610)

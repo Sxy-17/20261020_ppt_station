@@ -180,3 +180,10 @@ body[data-mode="overview"] #filmstrip { display:none; }
 .seg-keep { background:var(--keep); color:#fff; }
 .seg-redraw { background:var(--redraw); color:#fff; }
 .seg-undone { background:var(--panel-2); color:var(--text-dim); }
+
+/* ---- M3.5a 意见框 ---- */
+.opinion { flex:1; display:flex; gap:8px; min-width:260px; }
+#opinion-input { flex:1; background:var(--panel-2); color:var(--text);
+  border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:13px; }
+#page-meta[data-pending]::after { content:" · " attr(data-pending); color:var(--accent); }
+#page-meta[data-done]::after { content:" · " attr(data-done); color:var(--pass); }
