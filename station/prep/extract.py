@@ -151,12 +151,19 @@ def extract_page(slide, idx, total, slide_width, slide_height) -> tuple[str, dic
     tables_md: list[str] = []
     emphasis: list[dict] = []
     line_marks: list[dict] = []  # 手画线（含细长自动形状）：位置即强调位置（教训#16）
+    outline: list[dict] = []     # 正文占位符的大纲层级（换模板时保结构，用户 1028 问）
     for kind, sh in walk_shapes(slide.shapes):
         if kind == "group":
             counts["groups"] += 1
             continue
         cls = classify(sh)
         counts[cls] += 1
+        # 正文占位符的大纲层级：标题/正文/一二级 bullet 是 OOXML 标准语义，
+        # 换模板时靠它保结构（否则层级平铺丢失，二级 bullet 变一级）
+        if getattr(sh, "is_placeholder", False) and sh.placeholder_format.type == 2:  # BODY
+            for p in sh.text_frame.paragraphs:
+                if p.text.strip():
+                    outline.append({"lvl": p.level, "text": p.text.strip()})
         # 细长形状 = 手画线标记（下划线/波浪线以独立形状存在）：位置供初稿重现
         try:
             w, h = sh.width or 0, sh.height or 0
@@ -225,12 +232,18 @@ def extract_page(slide, idx, total, slide_width, slide_height) -> tuple[str, dic
         "counts": {**counts, "text_chars": chars},
         # 原文强调（颜色/加粗/文字级下划线）：初稿按模板强调语汇重现，语义不许丢
         "emphasis": emphasis[:30],
+        # 正文大纲层级（BODY 占位符 lvl）：换模板/重排时保结构的依据
+        "outline": outline[:40],
         # 手画线（下划线/波浪线以独立形状存在）：原页坐标位置，初稿按模板强调语汇重现
         "line_marks": line_marks[:20],
         "hidden": slide._element.get("show") == "0",  # python-pptx 不暴露隐藏位，读 XML 属性
     }
 
     md = [f"# P{idx} {title or '（无标题）'}", ""]
+    if outline:
+        md += ["## 大纲（含层级）"]
+        md += [f"{'  ' * o['lvl']}- {o['text']}" for o in outline]
+        md.append("")
     if texts:
         md += ["## 文字", *[f"- {t}" for t in texts], ""]
     if tables_md:
