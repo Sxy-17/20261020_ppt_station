@@ -187,3 +187,28 @@ body[data-mode="overview"] #filmstrip { display:none; }
   border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:13px; }
 #page-meta[data-pending]::after { content:" · " attr(data-pending); color:var(--accent); }
 #page-meta[data-done]::after { content:" · " attr(data-done); color:var(--pass); }
+
+/* ---- M3.5b 横幅 + 铃铛 ---- */
+#banners { position:fixed; top:0; left:50%; transform:translateX(-50%); z-index:60;
+  display:flex; flex-direction:column; gap:6px; }
+.banner { display:flex; gap:10px; align-items:center; background:var(--panel);
+  border:1px solid var(--pass); border-radius:8px; padding:8px 14px; font-size:13px;
+  box-shadow:0 6px 24px rgba(0,0,0,.5); animation:slide-in .25s ease; }
+@keyframes slide-in { from { transform:translateY(-120%); opacity:0; } }
+.banner .b-ok { color:var(--pass); font-weight:600; }
+.banner .b-page { color:var(--text); font-weight:600; }
+.banner .b-text { color:var(--text-dim); }
+.banner .b-go { background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+  border-radius:6px; padding:2px 10px; cursor:pointer; }
+.banner .b-x { background:none; border:none; color:var(--text-dim); cursor:pointer; }
+#bell { position:relative; }
+#bell-panel { position:fixed; top:44px; right:12px; z-index:60; width:300px;
+  background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding:8px; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+.bitem { display:flex; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer;
+  font-size:12px; align-items:center; }
+.bitem:hover { background:var(--panel-2); }
+.bitem .bs { width:16px; } .bitem.done .bs { color:var(--pass); } .bitem.queued .bs { color:var(--accent); }
+.bitem .bp { font-weight:600; color:var(--text); }
+.bitem .bt { color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bempty { color:var(--text-dim); font-size:12px; padding:8px; text-align:center; }
