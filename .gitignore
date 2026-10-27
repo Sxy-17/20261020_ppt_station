@@ -19,3 +19,6 @@ ref/
 
 # 导出的成品 pptx 较大，默认不入库（交付时单独打包）
 projects/*/exports/*.pptx
+
+# 盘点视图：每次重跑覆盖，非存档
+projects/inventory.json
