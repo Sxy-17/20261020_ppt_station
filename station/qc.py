@@ -38,6 +38,8 @@ def check_one(svg: Path) -> list[str]:
             continue
         if "External image not found" in t:
             continue  # 图片由 export staging 兑现，预检阶段跳过
+        if "With errors" in t or t.endswith("(100%)"):
+            continue  # 汇总行，非具体错误
         errors.append(t)
     if proc.returncode != 0 and not errors:
         errors.append(f"{svg.name}: 质检失败（exit {proc.returncode}），详情见上方输出")
