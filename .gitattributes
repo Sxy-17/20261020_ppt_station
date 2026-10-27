@@ -1,0 +1,7 @@
+# 换行统一 LF（防 Windows autocrlf 漂移与 CRLF 警告噪音，见 docs/ENGINEERING.md R14）
+* text=auto eol=lf
+*.png binary
+*.pptx binary
+*.ppt binary
+*.jpg binary
+*.wav binary

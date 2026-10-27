@@ -34,6 +34,8 @@
 - **素材不入库**（见 .gitignore）：inbox/*（留 README）、sources/、original.png、text.md；
   中间产物可可再生，但重生成必须可追溯（脚本都在 station/prep/）
 - **commit 即 push**：每次本地 commit 后立即 `git push`，远程始终最新
+- **工程失误与规范持续记录在 `docs/ENGINEERING.md`**——开发前必读；
+  新失误当日追加（只增不删），必须指明它固化成的 R 条目
 
 ## 工作区结构（可迁移架构）
 
