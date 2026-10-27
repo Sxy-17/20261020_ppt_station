@@ -1,0 +1,21 @@
+# 虚拟环境（AGENTS.md 环境规矩）
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+
+# 运行时锁与缓存（状态皆文件，但锁不进版本库）
+projects/*/live_lock.json
+projects/*/.confirm_ui.lock
+projects/*/live_preview/
+
+# 用户临时参考材料（不入库，文件留在盘上）
+ref/
+
+# 导出的成品 pptx 较大，默认不入库（交付时单独打包）
+projects/*/exports/*.pptx
