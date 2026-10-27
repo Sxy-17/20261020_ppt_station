@@ -144,7 +144,7 @@ def guess_role(idx, total, title, texts, code_lines, chars_total) -> str:
     return "content"
 
 
-def extract_page(slide, idx, total) -> tuple[str, dict]:
+def extract_page(slide, idx, total, slide_width, slide_height) -> tuple[str, dict]:
     counts = dict(autoshapes=0, connectors=0, pictures=0, charts=0,
                   tables=0, textboxes=0, groups=0, smartart=0, freeforms=0, others=0)
     texts: list[str] = []
@@ -188,20 +188,40 @@ def extract_page(slide, idx, total) -> tuple[str, dict]:
     diagram_like = (counts["connectors"] >= DIAGRAM_MIN_CONNECTORS or
                     counts["autoshapes"] >= DIAGRAM_MIN_AUTOSHAPES)
 
+    # 图片主导检测（教训#18）：大图占页面主体的页，优先保留原图贴入，
+    # 不重画——重绘收益低（图已存在）风险高（信息丢失）
+    try:
+        page_area = abs(slide_width * slide_height)
+        pic_area = 0
+        for kind, sh in walk_shapes(slide.shapes):
+            if kind == "atom" and sh.shape_type == MSO_SHAPE_TYPE.PICTURE:
+                pic_area += abs((sh.width or 0) * (sh.height or 0))
+        dominant_picture = page_area > 0 and pic_area / page_area > 0.20
+    except Exception:
+        dominant_picture = False
+
     role = guess_role(idx, total, title, texts, code_lines, chars_total)
     # 图形页角色覆盖为 diagram：初稿生成时按图形页版式出稿，
     # 而不是被"字少"启发式错派成章节隔页
     if diagram_like and role in ("section", "content"):
         role = "diagram"
 
+    # 建议裁决优先级：图片主导 > 图形页重绘 > 通过
+    # （素材形态优先：大图页保留原图贴入，风险最低，教训#18）
+    if dominant_picture:
+        suggest = "keep"
+    elif diagram_like:
+        suggest = "redraw"
+    else:
+        suggest = "pass"
+
     meta = {
         "page": idx,
         "title": title,
         "role_guess": role,
         "diagram_like": diagram_like,
-        # 建议裁决：图形页挂重绘（铁律：图绝不允许丢成纯文字）；其余先通过，
-        # 最终裁决永远是用户在工作台点的
-        "suggest": "redraw" if diagram_like else "pass",
+        "dominant_picture": dominant_picture,
+        "suggest": suggest,
         "counts": {**counts, "text_chars": chars},
         # 原文强调（颜色/加粗/文字级下划线）：初稿按模板强调语汇重现，语义不许丢
         "emphasis": emphasis[:30],
@@ -252,7 +272,7 @@ def main() -> int:
     for i, slide in enumerate(prs.slides, 1):
         d = pages_dir / f"{i:03d}"
         d.mkdir(parents=True, exist_ok=True)
-        md, meta = extract_page(slide, i, n)
+        md, meta = extract_page(slide, i, n, prs.slide_width, prs.slide_height)
         (d / "text.md").write_text(md, encoding="utf-8")
         (d / "meta.json").write_text(
             json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

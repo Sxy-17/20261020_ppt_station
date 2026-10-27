@@ -51,6 +51,7 @@
 | 15 | 1028 | P2 重绘导出失败但 `export \| tail -1 && 截图` 照跑，截了旧文件 | bash 管道 exit code = 最后一个命令（tail） | R18；验证链禁管道吞码 |
 | 16 | 1028 | 用户发现初稿忽略了原文下划线/波浪线（老师划重点的手段）；且两种形态都没抓：文字级 u= 属性、独立线形状 | 划重点不只靠颜色/加粗；细长线形状混在 autoshapes 里没单独记 | extract 增强：u= 入 emphasis、细长形状入 line_marks（含坐标）；SOP 补重现规则 |
 | 17 | 1028 | P40 红字（活跃/死亡）没进 emphasis——红藏在 schemeClr val=hlink（超链接主题色恰映射红）；黄下划线/波浪线是 ppt/ink 墨迹部件（老师放映时手绘），不在 shapes 树 | 强调有三种形态+两个 XML 盲区：schemeClr 引用、ink 部件 | extract 补 schemeClr 抽取；ink 不可 XML 确定解析→vision.md 视觉标注承载（R16 兜底价值实证） |
+| 18 | 1028 | P48 依赖图本来就是整张 PICTURE（P36 流图同理），我却重画了整图——放着原图不用，白担拓扑错误风险 | 决策序缺「素材形态优先」：图已存在时重绘收益≈0 风险>0 | extract 增 dominant_picture（图片面积>20%→suggest=keep）；extract_pictures.py 提图；SKILL 决策序三级化；STATION-KNOWLEDGE #7 |
 
 ---
 
