@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PPT 工作台 · 审核</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header id="topbar">
+  <span id="task-name" class="task-name">—</span>
+  <span id="progress" class="progress">0/0</span>
+  <div class="nav">
+    <button id="btn-prev" title="上一页（←）">◀</button>
+    <select id="page-select" title="跳页"></select>
+    <button id="btn-next" title="下一页（→）">▶</button>
+  </div>
+  <span class="kbd-hint">1 保留 · 2 通过 · 3 重绘 · S 星标 · ←/→ 翻页</span>
+</header>
+
+<main id="panes">
+  <section class="pane">
+    <div class="pane-title">原页</div>
+    <div class="pane-body" id="original-body"><img id="original-img" alt="原页截图"></div>
+  </section>
+  <section class="pane">
+    <div class="pane-title">新页 <span id="draft-state" class="draft-state"></span></div>
+    <div class="pane-body" id="draft-body"><div id="draft-holder"></div></div>
+  </section>
+</main>
+
+<footer id="verdictbar">
+  <div class="verdict-group">
+    <button class="vbtn v-keep"   data-v="keep">1 保留原样</button>
+    <button class="vbtn v-pass"   data-v="pass">2 通过当前稿</button>
+    <button class="vbtn v-redraw" data-v="redraw">3 审美引擎重绘</button>
+    <button class="vbtn v-clear"  data-v="">清除</button>
+    <button class="vbtn v-star"   id="btn-star">★ 回看</button>
+  </div>
+  <div class="meta" id="page-meta"></div>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

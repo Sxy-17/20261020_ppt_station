@@ -1,5 +1,5 @@
 # ppt-station 依赖（装在 .venv，见 AGENTS.md 环境规矩）
 # M1: 盘点/准备链
 python-pptx>=1.0
-# M3 起: 选择页与审核工作台（届时再装，现在保持最小）
-# flask>=3.0
+# M3 审核工作台
+flask>=3.0
