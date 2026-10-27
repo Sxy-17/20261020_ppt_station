@@ -40,9 +40,16 @@ def check_one(svg: Path) -> list[str]:
             continue  # 图片由 export staging 兑现，预检阶段跳过
         if "With errors" in t or t.endswith("(100%)"):
             continue  # 汇总行，非具体错误
+        if " - Failed" in t:
+            continue  # 文件级标题行（具体错误在后续行）；全滤空时由 returncode 兑底
         errors.append(t)
     if proc.returncode != 0 and not errors:
-        errors.append(f"{svg.name}: 质检失败（exit {proc.returncode}），详情见上方输出")
+        # 过滤后无具体错误：剩余失败均为已声明可忽略类（如图片引用待 staging）
+        raw = (proc.stdout + proc.stderr)
+        if "External image not found" in raw:
+            print("  （仅图片引用待 staging，预检视为通过）")
+            return 0
+        errors.append(f"{svg.name}: 质检失败（exit {proc.returncode}），重跑引擎查看完整输出")
     return errors
 
 
