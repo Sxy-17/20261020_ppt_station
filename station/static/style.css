@@ -105,3 +105,12 @@ body[data-mode="overview"] #overview {
 .mode-toggle button:first-child { border-radius: 6px 0 0 6px; }
 .mode-toggle button:last-child { border-radius: 0 6px 6px 0; }
 .mode-toggle button.active { color: var(--text); background: var(--line); }
+
+/* ---- M3.2b 批量条/选区 ---- */
+#bulkbar { display:none; align-items:center; gap:8px; padding:8px 16px;
+  background:var(--panel); border-top:1px solid var(--line); flex:none; }
+.ocard.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#bulkbar .skip, #bulkbar .range { color: var(--text-dim); font-size:12px; }
+#bulkbar input[type=number], #bulkbar select {
+  background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+  border-radius:4px; padding:3px 6px; }

@@ -35,6 +35,20 @@
 
 <div id="filter-chips" class="filter-chips"></div>
 <main id="overview"></main>
+<div id="bulkbar" style="display:none">
+  <span id="bulk-count"></span>
+  <button class="vbtn" data-bv="pass">✓ 通过</button>
+  <button class="vbtn" data-bv="keep">▣ 保留</button>
+  <button class="vbtn" data-bv="redraw">✦ 重绘</button>
+  <button class="vbtn" data-bv="">清除裁决</button>
+  <label class="skip"><input type="checkbox" id="bulk-skip" checked> 跳过已裁决</label>
+  <span class="range">范围 <input id="bulk-from" type="number" min="1" style="width:64px"> –
+    <input id="bulk-to" type="number" min="1" style="width:64px">
+    <select id="bulk-range-v"><option value="pass">通过</option><option value="keep">保留</option><option value="redraw">重绘</option><option value="">清除</option></select>
+    <button class="vbtn" id="bulk-range-apply">应用</button></span>
+  <button class="vbtn" id="bulk-undo" title="Ctrl+Z">↩ 撤销上次批量</button>
+  <button class="vbtn" id="bulk-cancel">取消选区</button>
+</div>
 <footer id="verdictbar">
   <div class="verdict-group">
     <button class="vbtn v-keep"   data-v="keep">1 保留原样</button>

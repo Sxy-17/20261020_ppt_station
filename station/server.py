@@ -144,6 +144,44 @@ def api_verdict(name: str, n: int):
     return jsonify({"ok": True, **data})
 
 
+@app.post("/api/task/<name>/verdicts")
+def api_verdicts(name: str):
+    """批量裁决（M3.2b）：一次写多页 + 审计日志；撤销也走这里（回写旧值）。
+    跳过已裁决页由客户端算好再发（服务端保持纯粹：收啥写啥）。"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    body = request.get_json(force=True)
+    entries = body.get("entries", [])
+    if not entries or len(entries) > 1000:
+        return jsonify({"error": "entries 为空或超限"}), 400
+    written = []
+    for e in entries:
+        pdir = d / "pages" / f"{int(e['page']):03d}"
+        if not pdir.is_dir():
+            continue
+        verdict = e.get("verdict", "")
+        if verdict not in ("keep", "pass", "redraw", ""):
+            return jsonify({"error": f"非法裁决值：{verdict}"}), 400
+        old = read_verdict(pdir)
+        data = {"page": int(e["page"]), "verdict": verdict,
+                "star": bool(e.get("star", old.get("star", False))),
+                "note": e.get("note", old.get("note", "")),
+                "ts": datetime.now().isoformat(timespec="seconds")}
+        (pdir / "verdict.json").write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        written.append(data)
+    # 审计：谁在什么时候批量动了哪些页（batch_log.jsonl，追加式）
+    if body.get("log_action"):
+        with open(d / "batch_log.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": datetime.now().isoformat(timespec="seconds"),
+                                "action": body["log_action"],
+                                "verdict": written[0]["verdict"] if written else "",
+                                "pages": [w["page"] for w in written]},
+                               ensure_ascii=False) + "\n")
+    return jsonify({"ok": True, "written": written})
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=7610)

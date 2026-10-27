@@ -111,6 +111,9 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ---------- 批量裁决后刷新（overview.js 派发） ----------
+document.addEventListener("pages-updated", () => { buildPageSelect(); render(state.cur); });
+
 // ---------- 启动：hash 定位任务，缺省列第一个 ----------
 (async () => {
   const hash = location.hash.replace("#", "");
