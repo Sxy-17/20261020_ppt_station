@@ -12,23 +12,28 @@ Thumbs.db
 # agent 测试/实验区（测试任务、测试投料都进这里，绝不进用户区）
 tmp/
 
-# 用户投料与任务素材（大文件/内容隐私，永不入库；文件保留在盘上）
+# ── 用户内容永不入库（隐私红线，教训#19）──────────────
+# projects/ 下除本 README 外的一切：任务源件、逐页材料、诊断、
+# draft、vision、裁决、台账、导出——全部是用户私有内容。
+# "状态皆文件"指文件在盘上可迁移，不等于进 git。
+projects/*
+!projects/README.md
+
+# 用户投料区同理
 inbox/*
 !inbox/README.md
-projects/*/sources/
-projects/*/pages/*/original.png
-projects/*/pages/*/text.md
 
-# 运行时锁与缓存（状态皆文件，但锁不进版本库）
+# 用户临时参考材料
+ref/
+
+# 盘点视图（含用户文件名清单）
+projects/inventory.json
+
+# ── 运行时锁与缓存 ──
 projects/*/live_lock.json
 projects/*/.confirm_ui.lock
 projects/*/live_preview/
-
-# 盘点视图：每次重跑覆盖，非存档
-projects/inventory.json
-
-# 用户临时参考材料（不入库，文件留在盘上）
-ref/
+projects/*/exports/*.pptx
 
 # 导出的成品 pptx 较大，默认不入库（交付时单独打包）
-projects/*/exports/*.pptx
+*.pptx
