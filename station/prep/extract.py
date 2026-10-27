@@ -79,11 +79,32 @@ def classify(sh) -> str:
     return "others"
 
 
-def shape_text(sh) -> str:
-    """取一个形状的全部文字（runs 拼接，空形状返回空串）"""
+def shape_text(sh) -> tuple[str, list]:
+    """取文字+强调信息。颜色/加粗是**语义**（原文红字=重要标记），
+    这些 XML 里就有，确定性读取，不依赖视觉（教训#13：s3 丢红字）"""
     if not getattr(sh, "has_text_frame", False):
-        return ""
-    return "\n".join(p.text for p in sh.text_frame.paragraphs if p.text)
+        return "", []
+    lines, emph = [], []
+    for p in sh.text_frame.paragraphs:
+        if p.text:
+            lines.append(p.text)
+        for r in p.runs:
+            if not r.text.strip():
+                continue
+            color = None
+            try:
+                if r.font.color is not None and r.font.color.type is not None:
+                    rgb = str(r.font.color.rgb)  # 仅显式 RGB 有语义；主题色继承不算强调
+                    if r.font.color.type == 1:   # MSO_COLOR_TYPE.RGB
+                        color = rgb
+            except Exception:
+                color = None
+            bold = r.font.bold is True
+            if color or bold:
+                emph.append({"text": r.text.strip(),
+                             "color": f"#{color}" if color else None,
+                             "bold": bold})
+    return "\n".join(lines), emph
 
 
 def table_md(sh) -> str:
@@ -118,15 +139,17 @@ def extract_page(slide, idx, total) -> tuple[str, dict]:
                   tables=0, textboxes=0, groups=0, smartart=0, others=0)
     texts: list[str] = []
     tables_md: list[str] = []
+    emphasis: list[dict] = []
     for kind, sh in walk_shapes(slide.shapes):
         if kind == "group":
             counts["groups"] += 1
             continue
         cls = classify(sh)
         counts[cls] += 1
-        txt = shape_text(sh)
+        txt, emph = shape_text(sh)
         if txt:
             texts.append(txt)
+        emphasis += emph
         if cls == "tables":
             tables_md.append(table_md(sh))
 
@@ -159,6 +182,8 @@ def extract_page(slide, idx, total) -> tuple[str, dict]:
         # 最终裁决永远是用户在工作台点的
         "suggest": "redraw" if diagram_like else "pass",
         "counts": {**counts, "text_chars": chars},
+        # 原文强调（颜色/加粗）：初稿生成时按模板强调语汇重现，语义不许丢
+        "emphasis": emphasis[:30],
         "hidden": slide._element.get("show") == "0",  # python-pptx 不暴露隐藏位，读 XML 属性
     }
 
@@ -167,6 +192,13 @@ def extract_page(slide, idx, total) -> tuple[str, dict]:
         md += ["## 文字", *[f"- {t}" for t in texts], ""]
     if tables_md:
         md += ["## 表格", *tables_md, ""]
+    if emphasis:
+        by_color: dict[str, list[str]] = {}
+        for e in emphasis:
+            key = (e["color"] or "") + ("粗" if e["bold"] else "")
+            by_color.setdefault(key or "粗", []).append(e["text"])
+        md += ["## 强调（原文如此）",
+               *[f"- {k}：{'、'.join(v[:6])}" for k, v in by_color.items()], ""]
     md.append(f"<!-- role={meta['role_guess']} diagram={diagram_like} "
               f"shapes={counts['autoshapes']+counts['connectors']} -->")
     return "\n".join(md), meta
