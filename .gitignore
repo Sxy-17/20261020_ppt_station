@@ -9,16 +9,26 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# agent 测试/实验区（测试任务、测试投料都进这里，绝不进用户区）
+tmp/
+
+# 用户投料与任务素材（大文件/内容隐私，永不入库；文件保留在盘上）
+inbox/*
+!inbox/README.md
+projects/*/sources/
+projects/*/pages/*/original.png
+projects/*/pages/*/text.md
+
 # 运行时锁与缓存（状态皆文件，但锁不进版本库）
 projects/*/live_lock.json
 projects/*/.confirm_ui.lock
 projects/*/live_preview/
+
+# 盘点视图：每次重跑覆盖，非存档
+projects/inventory.json
 
 # 用户临时参考材料（不入库，文件留在盘上）
 ref/
 
 # 导出的成品 pptx 较大，默认不入库（交付时单独打包）
 projects/*/exports/*.pptx
-
-# 盘点视图：每次重跑覆盖，非存档
-projects/inventory.json

@@ -24,6 +24,17 @@
 - **装任何 Python 包必须在虚拟环境里**（工作区根的 `.venv`），不污染系统 Python
 - 运行项目脚本统一用：`.venv/Scripts/python <脚本路径>`
 
+## 区域划分与仓库纪律（用户地盘不可侵犯）
+
+- **用户区**：`inbox/`、`projects/`（真实任务）、`ref/`、`library/` —— inbox 只按收制搬运，
+  **任何情况下不得删除**；产出（exports/）与原始输入（sources/）永不删
+- **agent 测试/实验区**：一律进 `tmp/`（gitignored）——测试任务用 `--root tmp/...`，
+  测试投料目录也在 tmp/ 下造；绝不把测试写进用户区
+- **清理铁律**：只点名删除（如 `tmp/某夹具`），删前先 `ls` 看内容；禁止通配删除
+- **素材不入库**（见 .gitignore）：inbox/*（留 README）、sources/、original.png、text.md；
+  中间产物可可再生，但重生成必须可追溯（脚本都在 station/prep/）
+- **commit 即 push**：每次本地 commit 后立即 `git push`，远程始终最新
+
 ## 工作区结构（可迁移架构）
 
 ```

@@ -40,7 +40,14 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("path", help="inbox 内相对路径或绝对路径")
     ap.add_argument("--task", help="自定义任务名（默认=文件名slug+时间戳）")
+    ap.add_argument("--root", default="projects",
+                    help="任务根目录；测试必须指到 tmp/ 下，绝不把测试写进用户区")
     args = ap.parse_args()
+
+    # 任务根：相对路径相对工作区根（agent 可能从任意 CWD 调用）
+    root_dir = Path(args.root)
+    if not root_dir.is_absolute():
+        root_dir = ROOT / root_dir
 
     src = Path(args.path)
     if not src.is_absolute() and not src.exists():
@@ -54,7 +61,7 @@ def main() -> int:
         return 2
 
     task = args.task or (slugify(src.stem) or "task") + datetime.now().strftime("_%Y%m%d_%H%M")
-    task_dir = ROOT / "projects" / task
+    task_dir = root_dir / task
     if task_dir.exists():
         print(f"任务目录已存在：{task_dir}（换个 --task 名）")
         return 2
@@ -74,8 +81,8 @@ def main() -> int:
         print(f"搬运失败（文件可能正被 PowerPoint 打开）：{exc}")
         return 3
 
-    # 登记簿：追加式，谁/何时/从哪/到哪——审计与回退的依据
-    ledger = ROOT / "projects" / "intake_ledger.json"
+    # 登记簿跟着任务根走：测试任务的登记不进真实台账（区域分离）
+    ledger = root_dir / "intake_ledger.json"
     data = {"entries": []}
     if ledger.exists():
         data = json.loads(ledger.read_text(encoding="utf-8"))
@@ -98,7 +105,9 @@ def main() -> int:
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"✓ 已收编 {src.name} → {dst}")
-    print(f"  任务：projects/{task}（status=intake）")
+    # 显示相对工作区的真实路径（测试任务在 tmp/ 下，不能谎报 projects/）
+    rel = task_dir.relative_to(ROOT) if task_dir.is_relative_to(ROOT) else task_dir
+    print(f"  任务：{rel}（status=intake）")
     return 0
 
 
