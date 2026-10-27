@@ -76,6 +76,8 @@ def classify(sh) -> str:
         return "autoshapes"
     if "FREEFORM" in str(sh.shape_type):
         return "freeforms"  # 手画线/波浪线常以 freeform 存在（教训#16）
+    if "OLE" in str(sh.shape_type) or "EMBEDDED" in str(sh.shape_type):
+        return "ole"  # 内嵌对象：公式编辑器/Excel 表等（对象保真清单成员，教训#18 推广）
     if sh.shape_type == MSO_SHAPE_TYPE.TEXT_BOX:
         return "textboxes"
     return "others"
@@ -146,7 +148,8 @@ def guess_role(idx, total, title, texts, code_lines, chars_total) -> str:
 
 def extract_page(slide, idx, total, slide_width, slide_height) -> tuple[str, dict]:
     counts = dict(autoshapes=0, connectors=0, pictures=0, charts=0,
-                  tables=0, textboxes=0, groups=0, smartart=0, freeforms=0, others=0)
+                  tables=0, textboxes=0, groups=0, smartart=0, freeforms=0,
+                  ole=0, others=0)
     texts: list[str] = []
     tables_md: list[str] = []
     emphasis: list[dict] = []

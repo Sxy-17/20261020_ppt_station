@@ -48,6 +48,8 @@ metadata:
 3. **确认包** = 诊断报告+处方，三通道任一完成：①选择页点选 ②聊天快答（"1A"）③委托（"你定"→按推荐值出 10 页试稿直接进工作台）
 4. **初稿生成**（agent 手写 SVG，方言=引擎扁平页契约，关键规则）：
    - 先读审美库 `type: template` 选篇（palette tokens+纪律）+ 图形页兼读 `diagram-recipe`；目标字体用本机已装（如 Microsoft YaHei）
+   - **对象保真清单（逐类映射，meta.counts 驱动）**：原页每个可识别 object 类别在新稿里保持同类独立对象，只许升格不许降格——
+     图片→贴图；表格→SVG 表格（可加 `--native-charts-and-tables` 升原生）；OLE 公式→文本/Unicode 公式重排或原生公式标记；手画线→独立线形状；文本框→独立文本框；形状→形状。禁止：对象→合并/贴图化/降格为纯文字
    - 每页写 `pages/NNN/draft.svg`：viewBox 按画幅（16:9=0 0 1280 720）；根 svg 带 `lang="zh-CN"` + `data-pptx-page-role`（diagram→content）+ 公共 `font-family`；背景全幅 rect 带 id+`data-pptx-role="background"`；**每个语义组 `<g id>` + `data-pptx-bounds` 且互不重叠**（标题独立成组）；每逻辑段一个 `<text>`，续行用定位 tspan（复读 x + 正 dy），行内强调用非定位 tspan；色全大写 #RRGGBB；箭头走 marker 三角契约；`&<>` 必须 XML 转义，**缩进用 NBSP**（普通空格会被吞）
    - 图形页重绘：**必须由具备视觉的 agent 看 `original.png` 后重画，且优先参照 vision.md 已记拓扑**，拓扑保真是硬约束（原图的形状/连线/层级逻辑不许改，只换视觉语言）；无视觉会话**禁止猜画**，图形页初稿一律降级为"保留原样"：贴原图 `../images/pNNN_original.png`（等比缩放入画幅，加白底），待有视觉会话再重绘
    - 原文强调（meta.emphasis：颜色/加粗/**文字级下划线 u=**）与 **meta.line_marks（手画线形状含坐标）** 必须重现，且**形态保真**：文字级下划线→text-decoration；**独立线/波浪线形状→导出后仍是独立形状**（SVG 独立线元素，不转文字属性，保持可单独选中）——线放所依附内容组的内部嵌套组（§4.3 叠放标注不占独立 zone，否则 bounds 重叠拦截）；线与文字的空间对应不确定时以视觉模型/用户确认为准；ink 墨迹（第三形态）位置由 vision.md 记录，同样以独立形状重现
