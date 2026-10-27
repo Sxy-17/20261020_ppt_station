@@ -6,7 +6,7 @@
 |---|---|---|
 | `server.py` | Flask 常驻服务：选择页 + 审核工作台（模式抄 ppt-master confirm_ui/svg_editor：localhost + 锁文件 + JSON 传话） | M3 |
 | `prep/` | 收件箱盘点（轻体检）/ 准备链（COM 转换、逐页截图、抽文字、诊断） | M1 |
-| `export/` | svg_to_pptx 薄封装（ppt-master 绝不深改，只包一层） | M2 |
+| `export/` | svg_to_pptx 薄封装（staging+质检+编译+收货） | ✅ M2 已验收 |
 | `static/` | 前端（无构建链，原生 ES Modules + CSS tokens，UX 基准见 docs/PLAN.md §2.3A） | M3/M4 |
 
 ## 代码规矩（继承 AGENTS.md，此处细化）

@@ -37,6 +37,8 @@
 | 7 | 1027 | 每次 commit 刷屏 LF→CRLF 警告 | 仓库无 .gitattributes，Windows autocrlf 漂移 | 加 .gitattributes 统一 LF + 一次性 renormalize（R14） |
 | 8 | 1027 | commit d4a0205 后 push 超时失败 | 本机无代理直连 GitHub 不通（环境问题） | R4：记账待推，网络恢复补推 |
 | 9 | 1027 | heredoc 测试脚本打印"夹具就绪"变乱码 | 测试脚本忘了 reconfigure，只防了正式脚本 | R8：heredoc 也要 |
+| 10 | 1027 | 导出的代码页缩进丢失（tspan 前导空格被 XML 归一化吞掉） | XML 空白归一化；契约允许 NBSP 原生 Unicode | 缩进一律 NBSP；已写进 SKILL §3 Step4 SOP |
+| 11 | 1027 | python-pptx 回读导出文本看到 \x0b 以为换行丢了 | \x0b 是 DrawingML 软换行（a:br），不是 bug | 验证产物按 \x0b 分行；已写进 SKILL §3 Step7 |
 
 ---
 
