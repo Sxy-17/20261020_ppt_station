@@ -19,6 +19,7 @@
     else { selected.clear(); updateBulkbar(); }
   }
   window.setMode = setMode;
+  window.setFilter = (key) => { setMode("overview"); curFilter = key; buildFilterChips(); renderOverview(); };
 
   // ---------- 筛选（M3.2a） ----------
   let curFilter = "all";

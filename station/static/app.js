@@ -69,6 +69,7 @@ async function render(idx) {
 }
 
 // ---------- 裁决写入 ----------
+window.setVerdict = setVerdict;
 async function setVerdict(verdict, extra = {}) {
   const p = state.pages[state.cur];
   const res = await fetch(`/api/task/${state.task}/page/${p.page}/verdict`, {
