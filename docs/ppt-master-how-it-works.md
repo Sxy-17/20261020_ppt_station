@@ -60,7 +60,16 @@ create-template 路线整体（M7 再评估直接跑还是薄封装）。
 - `icons/tabler-outline/`：5000+ 线形图标，生成时经 `icon_sync.py` 取用
 - `charts/` `tables/`：图表/表格词汇表
 
-## 6. 文档地图（需要深挖时按此顺序读）
+## 6. 引擎升级与回退规程（submodule 钉在一个 commit 上）
+
+**原则**：上游任何变化（含大重构/删库）都不会自动影响我们；指针只随验证过的升级移动。
+
+1. **升级**：`git -C ppt-master pull` → 跑 M2 导出冒烟测试 → 绿了才 `git add ppt-master && git commit`
+2. **回退**：`git -C ppt-master checkout c350bc31`（或任一验证过的版本）→ 提交指针变更
+3. **非改不可时**：fork 上游 → `git config submodule.ppt-master.url <fork地址>`，改动进 fork，不碰原仓
+4. **灾难保险（建议尽早做）**：`git -C ppt-master remote add mirror <你的GitHub仓库>` + push，上游删库也不怕
+
+## 7. 文档地图（需要深挖时按此顺序读）
 
 1. `workflows/routing.md`（路由总纲）
 2. 对应路线权威（如 `generate-pptx.md`）
