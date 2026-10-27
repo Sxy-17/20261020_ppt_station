@@ -5,7 +5,7 @@
 <title>PPT 工作台 · 审核</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body data-mode="single">
 <header id="topbar">
   <span id="task-name" class="task-name">—</span>
   <span id="progress" class="progress">0/0</span>
@@ -14,10 +14,15 @@
     <select id="page-select" title="跳页"></select>
     <button id="btn-next" title="下一页（→）">▶</button>
   </div>
+  <div class="mode-toggle">
+    <button id="mode-single" class="active">单页</button
+    ><button id="mode-overview">总览</button>
+  </div>
   <span class="kbd-hint">1 保留 · 2 通过 · 3 重绘 · S 星标 · ←/→ 翻页</span>
 </header>
 
 <main id="panes">
+
   <section class="pane">
     <div class="pane-title">原页</div>
     <div class="pane-body" id="original-body"><img id="original-img" alt="原页截图"></div>
@@ -28,6 +33,8 @@
   </section>
 </main>
 
+<div id="filter-chips" class="filter-chips"></div>
+<main id="overview"></main>
 <footer id="verdictbar">
   <div class="verdict-group">
     <button class="vbtn v-keep"   data-v="keep">1 保留原样</button>
@@ -40,5 +47,6 @@
 </footer>
 
 <script src="/static/app.js"></script>
+<script src="/static/overview.js"></script>
 </body>
 </html>
