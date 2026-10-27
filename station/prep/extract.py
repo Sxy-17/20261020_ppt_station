@@ -96,9 +96,11 @@ def shape_text(sh) -> tuple[str, list]:
             color = None
             try:
                 if r.font.color is not None and r.font.color.type is not None:
-                    rgb = str(r.font.color.rgb)  # 仅显式 RGB 有语义；主题色继承不算强调
-                    if r.font.color.type == 1:   # MSO_COLOR_TYPE.RGB
-                        color = rgb
+                    if r.font.color.type == 1:   # MSO_COLOR_TYPE.RGB：显式红字等
+                        color = str(r.font.color.rgb)
+                    elif r.font.color.type == 2:  # MSO_COLOR_TYPE.SCHEME：主题色引用
+                        # schemeClr 也可能是强调（如 hlink 恰映射红，教训#17）
+                        color = "scheme:" + str(r.font.color.theme_color)
             except Exception:
                 color = None
             bold = r.font.bold is True
@@ -109,7 +111,7 @@ def shape_text(sh) -> tuple[str, list]:
                 u_attr = rPr.get("u")
             if color or bold or u_attr:
                 emph.append({"text": r.text.strip(),
-                             "color": f"#{color}" if color else None,
+                             "color": f"#{color}" if color and not color.startswith("scheme:") else color,
                              "bold": bold,
                              "underline": u_attr})
     return "\n".join(lines), emph
