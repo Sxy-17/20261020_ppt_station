@@ -114,7 +114,7 @@ def main() -> int:
 
     out_dir = task_dir / "exports"
     out_dir.mkdir(exist_ok=True)
-    final = out_dir / f"{task_dir.name}_draft_{datetime.now().strftime('%H%M%S')}.pptx"
+    final = out_dir / f"{task_dir.name}_draft_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pptx"
     shutil.move(str(produced[-1]), final)
     if not args.keep_stage:
         shutil.rmtree(stage)
