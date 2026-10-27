@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>翻新 · 开始前确认</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="select-page">
+<div class="select-wrap">
+  <header class="select-head">
+    <h1>翻新 · 开始前确认</h1>
+    <span id="sel-task" class="task-name"></span>
+  </header>
+
+  <section class="diag" id="diag">
+    <div class="diag-title">📋 诊断</div>
+    <div id="diag-body" class="diag-body">读取中…</div>
+  </section>
+
+  <section class="rx">
+    <div class="diag-title">💊 处方（点选，◆=推荐已预选）</div>
+
+    <div class="field">
+      <label>风格</label>
+      <div id="tpl-cards" class="tpl-cards"></div>
+    </div>
+
+    <div class="field">
+      <label>画幅</label>
+      <div class="radios" id="ratio-group">
+        <label class="radio"><input type="radio" name="ratio" value="16:9" checked>16:9 ◆</label>
+        <label class="radio"><input type="radio" name="ratio" value="4:3">4:3</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>页面范围</label>
+      <div class="radios" id="range-group">
+        <label class="radio"><input type="radio" name="range" value="all" checked>全部 ◆</label>
+        <label class="radio"><input type="radio" name="range" value="front">前
+          <input id="range-n" type="number" min="1" value="10" style="width:56px"> 页</label>
+        <label class="radio"><input type="radio" name="range" value="custom">自定义
+          <input id="range-custom" type="text" placeholder="如 1-28,40" style="width:140px"></label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>图形页策略</label>
+      <div class="radios">
+        <label class="radio"><input type="radio" name="fig" value="redraw-first" checked>重绘优先 ◆</label>
+        <label class="radio"><input type="radio" name="fig" value="keep-all">全部保留原图</label>
+        <label class="radio"><input type="radio" name="fig" value="redraw-all">全部重绘</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>动效</label>
+      <div class="radios">
+        <label class="radio"><input type="radio" name="motion" value="none" checked>无 ◆</label>
+        <label class="radio"><input type="radio" name="motion" value="light">轻入场</label>
+      </div>
+    </div>
+  </section>
+
+  <footer class="select-foot">
+    <button id="btn-delegate" class="vbtn delegate">✦ 你定，先出10页看看</button>
+    <button id="btn-go" class="vbtn go">就这样，出稿 →</button>
+    <div class="hint">也可在聊天里回「1A」逐项缺省用 ◆ 推荐值</div>
+    <div id="done" class="done" hidden>✓ 已确认，正在生成初稿…本页可关闭</div>
+  </footer>
+</div>
+<script src="/static/select.js"></script>
+</body>
+</html>

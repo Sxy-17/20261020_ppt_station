@@ -54,6 +54,14 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.get("/select/<name>")
+def select_page(name: str):
+    """选择页（M3.3）：一次性表单式确认页"""
+    if task_dir(name) is None:
+        return jsonify({"error": "任务不存在"}), 404
+    return send_from_directory(app.static_folder, "select.html")
+
+
 @app.get("/api/tasks")
 def api_tasks():
     """任务清单（有 project.json 的目录）"""
@@ -180,6 +188,63 @@ def api_verdicts(name: str):
                                 "pages": [w["page"] for w in written]},
                                ensure_ascii=False) + "\n")
     return jsonify({"ok": True, "written": written})
+
+
+@app.get("/api/task/<name>/diagnosis")
+def api_diagnosis(name: str):
+    """选择页诊断区数据（M3.3）"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    f = d / "diagnosis.json"
+    if not f.exists():
+        return jsonify({"error": "尚未诊断"}), 404
+    return send_file(f, mimetype="application/json")
+
+
+@app.get("/api/templates")
+def api_templates():
+    """审美库模板卡片（M3.3）：轻量 frontmatter 解析，不引 YAML 依赖。
+    只抽选择页需要的字段；正文纪律不传（agent 生成时直读 .md）。"""
+    import re
+    lib = ROOT / "library" / "aesthetics"
+    out = []
+    for f in sorted(lib.glob("template-*.md")):
+        head = f.read_text(encoding="utf-8").split("---")[1]  # 首个 --- 之间
+        def field(k):
+            m = re.search(rf"^{k}:\s*(.+)$", head, re.M)
+            return m.group(1).strip().strip('"') if m else ""
+        palette = {}
+        pm = re.search(r"^palette:\n((?:\s+\w+:.*\n?)+)", head, re.M)
+        if pm:
+            for ln in pm.group(1).strip().splitlines():
+                mm = re.match(r'\s*(\w+):\s*"?#?([0-9A-Fa-f]{0,8})', ln)
+                if mm and mm.group(2):
+                    palette[mm.group(1)] = "#" + mm.group(2).upper()
+        out.append({"id": field("id") or f.stem, "name": field("name"),
+                    "category": field("category"), "applies": field("applies"),
+                    "palette": palette})
+    return jsonify(out)
+
+
+@app.post("/api/task/<name>/selection")
+def api_selection(name: str):
+    """确认包收据落盘（M3.3）：selection.json + project.json 状态推进"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    body = request.get_json(force=True)
+    sel = {"ts": datetime.now().isoformat(timespec="seconds"),
+           "delegate": bool(body.get("delegate", False)),
+           "choices": body.get("choices", {})}
+    (d / "selection.json").write_text(
+        json.dumps(sel, ensure_ascii=False, indent=2), encoding="utf-8")
+    pjf = d / "project.json"
+    pj = json.loads(pjf.read_text(encoding="utf-8")) if pjf.exists() else {}
+    pj["status"] = "delegate" if sel["delegate"] else "confirmed"
+    pj["selected_at"] = sel["ts"]
+    pjf.write_text(json.dumps(pj, ensure_ascii=False, indent=2), encoding="utf-8")
+    return jsonify({"ok": True, **sel})
 
 
 def main() -> int:
