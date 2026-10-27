@@ -159,3 +159,24 @@ body[data-mode="overview"] #overview {
 .pitem.active { background:var(--panel-2); }
 .phint { color:var(--text-dim); font-size:12px; }
 .kbd-hint::before { content:"⌘K 命令面板 · "; }
+
+/* ---- M3.4b 胶片条 + 分段进度 ---- */
+#filmstrip { flex:none; display:flex; gap:6px; overflow-x:auto; padding:6px 16px;
+  background:var(--panel); border-top:1px solid var(--line); min-height:86px; }
+body[data-mode="overview"] #filmstrip { display:none; }
+.fcard { flex:none; width:104px; cursor:pointer; position:relative;
+  border:1px solid var(--line); border-radius:6px; overflow:hidden; background:var(--panel-2); }
+.fcard .fthumb { height:58px; display:flex; align-items:center; justify-content:center; background:#fff; }
+.fcard .fthumb svg, .fcard .fthumb img { max-width:100%; max-height:58px; }
+.fcard .fpn { font-size:11px; color:var(--text-dim); display:block; text-align:center;
+  padding:1px 0; }
+.fcard.cur { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.fcard.starred .fpn { color:var(--star); }
+.fcard .fnd { position:absolute; top:2px; right:4px; font-size:11px; }
+#progress-segs { display:flex; width:180px; height:10px; border-radius:5px; overflow:hidden;
+  border:1px solid var(--line); cursor:pointer; }
+.seg { display:flex; align-items:center; justify-content:center; font-size:9px; min-width:8px; }
+.seg-pass { background:var(--pass); color:#fff; }
+.seg-keep { background:var(--keep); color:#fff; }
+.seg-redraw { background:var(--redraw); color:#fff; }
+.seg-undone { background:var(--panel-2); color:var(--text-dim); }
