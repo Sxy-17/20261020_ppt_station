@@ -100,6 +100,29 @@ def main() -> int:
         else:
             print(f"⚠ 图片缺引用源：{name}（导出可能失败）")
 
+    # 动效侧车（M5.1）：任务级 animations.json 用页号寻址，引擎要 SVG 文件名词干——
+    # 这里做薄转换（引擎零改动，符合薄封装原则）
+    anim_src = task_dir / "animations.json"
+    if anim_src.exists():
+        try:
+            src = json.loads(anim_src.read_text(encoding="utf-8"))
+            staged_names = {int(p.stem.split("_")[0]): p.stem for p in (stage / "svg_output").glob("*.svg")}
+            out = {"version": 1, "slides": {}}
+            for page_no, entries in src.get("pages", {}).items():
+                stem = staged_names.get(int(page_no))
+                if not stem:
+                    continue
+                groups = {}
+                for e in entries:
+                    groups.setdefault(e["group"], {"effects": []})["effects"].append(
+                        {k: v for k, v in e.items() if k != "group"})
+                out["slides"][stem] = {"groups": groups}
+            (stage / "animations.json").write_text(
+                json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"  staged 动效 animations.json（{len(out['slides'])} 页）")
+        except Exception as exc:  # noqa: BLE001 —— 坏动效不阻断静态导出
+            print(f"⚠ 动效侧车解析失败（忽略，按无动效导出）：{exc}")
+
     print("▶ 质检 svg_quality_checker …")
     chk = run_engine("svg_quality_checker.py",
                      [stage, "--quick-generate", "--canonical-authoring",
