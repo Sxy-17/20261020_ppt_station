@@ -344,6 +344,25 @@ def api_save_draft(name: str, n: int):
     return jsonify({"ok": True})
 
 
+@app.post("/api/task/<name>/asset")
+def api_asset(name: str):
+    """编辑器插图上传（M4.4）：存任务 images/，draft 用 ../images/<名>引用
+    （export 搬运规则已兼容 task/images/ 回退路径）"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    f = request.files.get("file")
+    if f is None:
+        return jsonify({"error": "无文件"}), 400
+    ext = (f.filename or "png").rsplit(".", 1)[-1].lower()
+    if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
+        return jsonify({"error": f"不支持的类型 {ext}"}), 400
+    fname = f"upload_{datetime.now().strftime('%H%M%S')}_{f.filename.replace(' ', '_')}"
+    (d / "images").mkdir(exist_ok=True)
+    (d / "images" / fname).write_bytes(f.read())
+    return jsonify({"ok": True, "name": fname})
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=7610)

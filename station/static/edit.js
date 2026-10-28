@@ -242,6 +242,8 @@
   function undo() {
     const op = ops.pop();
     if (!op) return;
+    if (op.type === "add") { op.el.remove(); deselect(); return; }
+    if (op.type === "del") { op.parent.insertBefore(op.el, op.next); return; }
     if (op.type === "attr") {
       if (op.attr === "#text") { op.el.textContent = op.old ?? op.new; }
       else if (op.old === null) op.el.removeAttribute(op.attr);
@@ -266,6 +268,113 @@
       if (ta) { ta.focus(); ta.select && ta.select(); }
     }
   });
+
+  // ---------- M4.4 新建/删除/插图 ----------
+  const bar = document.createElement("div");
+  bar.id = "ed-toolbar";
+  bar.innerHTML = ["文本", "矩形", "圆", "线"].map((t) =>
+    `<button class="vbtn" data-new="${t}">＋${t}</button>`).join("") +
+    `<button class="vbtn" id="ed-img">＋图片</button><input type="file" id="ed-file" accept="image/*" hidden>`;
+  btn.before(bar);
+  const NS = "http://www.w3.org/2000/svg";
+  let uid = 0;
+
+  function rootGroups(svg) {
+    return [...svg.children].filter((c) => c.tagName === "g" && c.getAttribute("data-pptx-bounds"));
+  }
+  function boundsOf(g) {
+    return g.getAttribute("data-pptx-bounds").split(" ").map(Number);
+  }
+  function intersects(a, b) {
+    return !(a[0] + a[2] <= b[0] + 1 || b[0] + b[2] <= a[0] + 1 ||
+             a[1] + a[3] <= b[1] + 1 || b[1] + b[3] <= a[1] + 1);
+  }
+  // 落点：先找包含点的语义组（归入其内部，不占新区）；否则找不与任何组重叠的空位
+  function hostFor(svg, x, y, w, h) {
+    for (const g of rootGroups(svg)) {
+      const b = boundsOf(g);
+      if (x >= b[0] && x <= b[0] + b[2] && y >= b[1] && y <= b[1] + b[3]) return g;
+    }
+    let ny = Math.min(Math.max(y, 8), 700 - h);
+    for (let tries = 0; tries < 90; tries++, ny += 8) {
+      const box = [x, ny, w, h];
+      if (!rootGroups(svg).some((g) => intersects(box, boundsOf(g)))) {
+        const g = document.createElementNS(NS, "g");
+        g.id = `user-new-${++uid}`;
+        g.setAttribute("data-pptx-bounds", box.join(" "));
+        svg.appendChild(g);
+        return g;
+      }
+    }
+    return null;
+  }
+  function insert(el, w, h) {
+    const svg = svgEl();
+    if (!svg) return;
+    const host = hostFor(svg, 620 - w / 2, 340 - h / 2, w, h);
+    if (!host) { alert("找不到不重叠的空位"); return; }
+    host.appendChild(el);
+    ops.push({ type: "add", el, parent: host });
+    select(el);
+  }
+  bar.querySelectorAll("[data-new]").forEach((b) => b.onclick = () => {
+    if (!svgEl()) return;
+    const t = b.dataset.new;
+    if (t === "文本") {
+      const e = document.createElementNS(NS, "text");
+      e.setAttribute("x", 620); e.setAttribute("y", 350);
+      e.setAttribute("font-size", 20); e.setAttribute("fill", "#1D2430");
+      e.textContent = "新文本";
+      insert(e, 80, 26);
+    } else if (t === "矩形") {
+      const e = document.createElementNS(NS, "rect");
+      e.setAttribute("x", 560); e.setAttribute("y", 320);
+      e.setAttribute("width", 120); e.setAttribute("height", 60);
+      e.setAttribute("fill", "#F5F7FA"); e.setAttribute("stroke", "#1F4E79");
+      e.setAttribute("stroke-width", 1.5);
+      insert(e, 120, 60);
+    } else if (t === "圆") {
+      const e = document.createElementNS(NS, "ellipse");
+      e.setAttribute("cx", 620); e.setAttribute("cy", 350);
+      e.setAttribute("rx", 45); e.setAttribute("ry", 45);
+      e.setAttribute("fill", "#F5F7FA"); e.setAttribute("stroke", "#1F4E79");
+      e.setAttribute("stroke-width", 1.5);
+      insert(e, 90, 90);
+    } else if (t === "线") {
+      const e = document.createElementNS(NS, "line");
+      e.setAttribute("x1", 560); e.setAttribute("y1", 350);
+      e.setAttribute("x2", 680); e.setAttribute("y2", 350);
+      e.setAttribute("stroke", "#1F4E79"); e.setAttribute("stroke-width", 2);
+      insert(e, 120, 2);
+    }
+  });
+  bar.querySelector("#ed-img").onclick = () => bar.querySelector("#ed-file").click();
+  bar.querySelector("#ed-file").onchange = async (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    const p = state.pages[state.cur];
+    const r = await fetch(`/api/task/${state.task}/asset`, { method: "POST", body: fd });
+    const d = await r.json();
+    if (!d.ok) { alert(d.error); return; }
+    const e = document.createElementNS(NS, "image");
+    e.setAttribute("href", `../images/${d.name}`);
+    const ratio = 4 / 3;
+    e.setAttribute("x", 560); e.setAttribute("y", 320);
+    e.setAttribute("width", 160); e.setAttribute("height", 160 / ratio);
+    e.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    insert(e, 160, 120);
+    ev.target.value = "";
+  };
+  function del() {
+    if (!selected) return;
+    let el = selected, parent = el.parentNode;
+    // 删根组=删整单元；内部元素只删自己
+    ops.push({ type: "del", el, parent, next: el.nextSibling });
+    el.remove();
+    deselect();
+  }
 
   document.addEventListener("keydown", (e) => {
     if (!editing) return;

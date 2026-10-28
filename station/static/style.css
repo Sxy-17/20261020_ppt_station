@@ -236,3 +236,6 @@ body.editing #draft-holder svg :is(rect,text,line,path,ellipse,image,g) { cursor
   padding-top:6px; }
 
 #btn-save { color: var(--pass); }
+
+#ed-toolbar { display:none; gap:6px; }
+body.editing #ed-toolbar { display:flex; }
