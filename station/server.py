@@ -349,7 +349,41 @@ def api_save_draft(name: str, n: int):
         f.write_text(bak.read_text(encoding="utf-8"), encoding="utf-8")  # 回滚
         errs = [l.strip()[:160] for l in r.stdout.splitlines() if "ERROR" in l][:5]
         return jsonify({"error": "质检未过，已回滚", "details": errs}), 422
+    # 版本历史：留最近 10 份（用户改错随时回退——M4.9）
+    vdir = f.parent / "versions"
+    vdir.mkdir(exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    (vdir / f"{stamp}.svg").write_text(svg_text, encoding="utf-8")
+    olds = sorted(vdir.glob("*.svg"))
+    for o in olds[:-10]:
+        o.unlink()
     return jsonify({"ok": True})
+
+
+@app.get("/api/task/<name>/page/<int:n>/versions")
+def api_versions(name: str, n: int):
+    """draft 版本历史列表（M4.9）"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    vdir = d / "pages" / f"{n:03d}" / "versions"
+    out = []
+    if vdir.exists():
+        for v in sorted(vdir.glob("*.svg"), reverse=True):
+            out.append({"ts": v.stem, "size": v.stat().st_size})
+    return jsonify(out)
+
+
+@app.get("/api/task/<name>/page/<int:n>/version/<ts>")
+def api_version(name: str, n: int, ts: str):
+    """取某版本内容（恢复=前端拿它再 POST draft，质检门照常把关）"""
+    d = task_dir(name)
+    if d is None or not ts.replace("_", "").isdigit():
+        return jsonify({"error": "参数非法"}), 404
+    v = d / "pages" / f"{n:03d}" / "versions" / f"{ts}.svg"
+    if not v.exists():
+        return jsonify({"error": "版本不存在"}), 404
+    return send_file(v, mimetype="image/svg+xml")
 
 
 @app.post("/api/task/<name>/asset")

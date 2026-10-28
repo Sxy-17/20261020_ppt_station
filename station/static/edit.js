@@ -414,7 +414,8 @@
   bar.innerHTML = ["文本", "矩形", "圆", "线"].map((t) =>
     `<button class="vbtn" data-new="${t}">＋${t}</button>`).join("") +
     `<button class="vbtn" id="ed-img">＋图片</button><input type="file" id="ed-file" accept="image/*" hidden>` +
-    `<button class="vbtn" id="ed-beautify" title="把选中的粗画结构交给 agent 按图形配方重画（拓扑保真）">✦ 美化选中</button>`;
+    `<button class="vbtn" id="ed-beautify" title="把选中的粗画结构交给 agent 按图形配方重画（拓扑保真）">✦ 美化选中</button>` +
+    `<button class="vbtn" id="ed-history" title="版本历史">🕘 历史</button>`;
   btn.before(bar);
   const NS = "http://www.w3.org/2000/svg";
   let uid = 0;
@@ -520,6 +521,28 @@
     });
     const d = await r.json();
     if (d.ok) { alert("已提交美化请求（进入队列，agent 消化后横幅提醒）"); window.refreshPendingCount(); }
+  };
+
+  // 版本历史（M4.9）
+  bar.querySelector("#ed-history").onclick = async () => {
+    const p = state.pages[state.cur];
+    const list = await (await fetch(`/api/task/${state.task}/page/${p.page}/versions`)).json();
+    if (!list.length) { alert("暂无历史版本（保存后产生）"); return; }
+    const pick = prompt("选择版本（恢复会走质检门）：
+" +
+      list.map((v, i) => `${i + 1}. ${v.ts}  ${Math.round(v.size / 1024)}KB`).join("
+") +
+      "
+输入序号，取消退出：");
+    const i = +pick - 1;
+    if (!(i >= 0 && i < list.length)) return;
+    const svg = await (await fetch(`/api/task/${state.task}/page/${p.page}/version/${list[i].ts}`)).text();
+    const r = await fetch(`/api/task/${state.task}/page/${p.page}/draft`, {
+      method: "POST", headers: { "Content-Type": "image/svg+xml" }, body: svg });
+    const d = await r.json();
+    alert(d.ok ? "已恢复该版本" : "恢复被质检门拦下：" + (d.details || []).join("
+"));
+    if (d.ok) window.render(state.cur);
   };
 
   function del() {
