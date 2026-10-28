@@ -267,3 +267,12 @@ body.editing #ed-handle:not([hidden]) { display:block; }
 body.b-mode #panes { grid-template-columns: 1fr; }
 body.b-mode section.pane:first-child { display: none; }
 body.b-mode .vbtn.v-keep, body.b-mode .vbtn.v-redraw { display: none; }
+
+/* ---- M6.2 大纲卡片 ---- */
+.ol-card { display:grid; grid-template-columns: 28px 1.2fr 90px 1fr auto auto auto;
+  gap:8px; align-items:center; padding:8px 10px; margin-bottom:6px; cursor:default; }
+.ol-card:hover { border-color: var(--line); }
+.ol-n { color:var(--accent); font-weight:600; text-align:center; }
+.ol-card input, .ol-card select { background:var(--panel-2); color:var(--text);
+  border:1px solid var(--line); border-radius:5px; padding:5px 8px; font-size:13px; width:100%; }
+.ol-title { font-weight:600; }

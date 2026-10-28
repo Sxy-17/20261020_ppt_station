@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>从零做 PPT · 大纲确认</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="select-page">
+<div class="select-wrap">
+  <header class="select-head">
+    <h1>从零做 PPT · 大纲确认</h1>
+    <span id="ol-task" class="task-name"></span>
+  </header>
+  <section class="diag">
+    <div class="diag-title">B 路线的命门闸——大纲跑偏，后面全白干</div>
+    <div class="diag-body">每页一卡：标题 + 页面角色 + 素材锚点（这页的证据来自哪）。
+      可增删/上下移/直接改字；聊天里说"第3页拆两页"改的是同一份 outline.json。</div>
+  </section>
+  <section id="cards" class="rx"></section>
+  <footer class="select-foot">
+    <button id="btn-add" class="vbtn">＋ 加一页</button>
+    <button id="btn-save" class="vbtn">保存草稿</button>
+    <button id="btn-go" class="vbtn go">大纲 OK → 开做</button>
+    <div id="done" class="done" hidden>✓ 大纲已确认，agent 开始逐页生成（工作台流式可见）</div>
+  </footer>
+</div>
+<script src="/static/outline.js"></script>
+</body>
+</html>

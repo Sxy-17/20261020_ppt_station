@@ -54,6 +54,14 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.get("/outline/<name>")
+def outline_page(name: str):
+    """大纲卡片确认页（M6.2，B 路线命门闸）"""
+    if task_dir(name) is None:
+        return jsonify({"error": "任务不存在"}), 404
+    return send_from_directory(app.static_folder, "outline.html")
+
+
 @app.get("/select/<name>")
 def select_page(name: str):
     """选择页（M3.3）：一次性表单式确认页"""
