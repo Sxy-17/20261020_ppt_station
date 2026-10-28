@@ -260,3 +260,5 @@ body.editing #ed-handle:not([hidden]) { display:block; }
 
 .fmot, .nmot { position:absolute; top:2px; left:4px; font-size:10px; color:var(--accent); }
 .ocard { position:relative; }
+
+.ed-guide { position:absolute; background:rgba(31,78,121,.55); pointer-events:none; z-index:3; }

@@ -210,6 +210,72 @@
     return m ? [+m[1], +m[2]] : [0, 0];
   }
 
+  // ---------- M4.8 智能参考线：兄弟边缘/画布中线，6px 吸附 ----------
+  const SNAP = 6;
+  let guides = [];
+  function clearGuides() { guides.forEach((g) => g.remove()); guides = []; }
+  function drawGuide(x, y, w, h) {
+    const g = document.createElement("div");
+    g.className = "ed-guide";
+    const hr = holder().getBoundingClientRect();
+    Object.assign(g.style, {
+      left: x - hr.left + "px", top: y - hr.top + "px", width: w + "px", height: h + "px",
+    });
+    holder().appendChild(g);
+    guides.push(g);
+  }
+  function snapTargets() {
+    // 对齐目标：同层兄弟的 bbox 边缘 + 画布中线（SVG 坐标→屏幕矩形）
+    const svg = svgEl();
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return [];
+    const toRect = (el) => {
+      const b = el.getBoundingClientRect();
+      const toSvg = (x, y) => new DOMPoint(x, y).matrixTransform(ctm.inverse());
+      const p1 = toSvg(b.left, b.top), p2 = toSvg(b.right, b.bottom);
+      return { l: p1.x, t: p1.y, r: p2.x, b: p2.y, cx: (p1.x + p2.x) / 2, cy: (p1.y + p2.y) / 2 };
+    };
+    const out = [];
+    for (const c of svg.children) {
+      if (c === selected || !c.getBoundingClientRect) continue;
+      try { out.push(toRect(c)); } catch { /* defs 等 */ }
+    }
+    const vw = +svg.viewBox.baseVal.width, vh = +svg.viewBox.baseVal.height;
+    out.push({ l: 0, t: 0, r: vw, b: vh, cx: vw / 2, cy: vh / 2, canvas: true });
+    return out;
+  }
+  function applySnap(dx, dy) {
+    // 拖动中的选中 bbox（SVG 坐标）
+    const b = selected.getBoundingClientRect();
+    const ctm = svgEl().getScreenCTM();
+    const to = (x, y) => new DOMPoint(x, y).matrixTransform(ctm.inverse());
+    const p1 = to(b.left, b.top), p2 = to(b.right, b.bottom);
+    const me = { l: p1.x, t: p1.y, r: p2.x, b: p2.y, cx: (p1.x + p2.x) / 2, cy: (p1.y + p2.y) / 2 };
+    clearGuides();
+    let ndx = dx, ndy = dy;
+    const near = (a, b2) => Math.abs(a - b2) < SNAP;
+    for (const t of snapTargets()) {
+      for (const [mine, theirs, axis] of
+           [[me.l, t.l, "x"], [me.r, t.r, "x"], [me.cx, t.cx, "x"],
+            [me.t, t.t, "y"], [me.b, t.b, "y"], [me.cy, t.cy, "y"]]) {
+        if (near(mine, theirs)) {
+          if (axis === "x") ndx += theirs - mine;
+          else ndy += theirs - mine;
+          const ctm2 = ctm;
+          const draw = (x1, y1, x2, y2) => {
+            const a = new DOMPoint(x1, y1).matrixTransform(ctm2);
+            const c = new DOMPoint(x2, y2).matrixTransform(ctm2);
+            drawGuide(Math.min(a.x, c.x), Math.min(a.y, c.y),
+                      Math.abs(c.x - a.x) || 1, Math.abs(c.y - a.y) || 1);
+          };
+          if (axis === "x") draw(theirs, 0, theirs, +svgEl().viewBox.baseVal.height);
+          else draw(0, theirs, +svgEl().viewBox.baseVal.width, theirs);
+        }
+      }
+    }
+    return [ndx, ndy];
+  }
+
   function move(e) {
     if (!dragging || !selected) return;
     const [ox, oy] = translateOf(start);
@@ -220,9 +286,10 @@
     const inv = ctm.inverse();
     const p1 = new DOMPoint(e.clientX, e.clientY).matrixTransform(inv);
     const p0 = new DOMPoint(last.x, last.y).matrixTransform(inv);
-    const dx = p1.x - p0.x, dy = p1.y - p0.y;
+    let dx = p1.x - p0.x, dy = p1.y - p0.y;
     last = { x: e.clientX, y: e.clientY };
     const [tx, ty] = translateOf(selected.getAttribute("transform"));
+    [dx, dy] = applySnap(dx, dy);
     selected.setAttribute("transform", `translate(${tx + dx} ${ty + dy})`);
     syncOverlay();
   }
@@ -230,6 +297,7 @@
   function up() {
     if (!dragging) return;
     dragging = false;
+    clearGuides();
     const t = selected ? selected.getAttribute("transform") : "";
     if (t && t !== start) {
       const [a1, b1] = translateOf(start);
