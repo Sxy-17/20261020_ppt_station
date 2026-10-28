@@ -94,3 +94,13 @@
 **落点**：extract counts 逐类计数（含 ole）→ SKILL §3 Step4 对象保真清单
 （逐类映射规则）→ 导出时表格/图表可选原生对象升级。识别面：
 `autoshapes/connectors/pictures/charts/tables/textboxes/freeforms/ole/smartart`。
+
+## 9. SVG 源文件的确定性审美提炼（外部迁移通道）
+
+**发现**（2026-10-28，用户投喂 TorchTurbo 架构图）：外部参考是 SVG 时，**不用视觉**——
+配色/线宽/圆角/字体阶梯全在 XML 里，正则直读比看图更精确且可复现。
+（本图还示范了"CSS 类定义文字阶梯"的工程做法——四+级字号字重色全在 <style>。）
+
+**通道**：用户丢链接/文件 → SVG 源直读（raw 域名墙走 jsDelivr CDN 镜像
+`cdn.jsdelivr.net/gh/<owner>/<repo>@<branch>/<path>`）→ 提炼入审美库
+（source: 外部迁移）→ 用户可否决。图片类参考才走视觉标注层。
