@@ -239,3 +239,5 @@ body.editing #draft-holder svg :is(rect,text,line,path,ellipse,image,g) { cursor
 
 #ed-toolbar { display:none; gap:6px; }
 body.editing #ed-toolbar { display:flex; }
+
+#ed-beautify { color: var(--star); }
