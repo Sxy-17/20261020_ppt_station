@@ -66,3 +66,5 @@
 | 21 | 1028 | api_templates 正则字面量含裸引号 → SyntaxError 服务起不来（冒烟 000 才发现） | 双引号串里再写引号必须转义或换单引号包裹 | 冒烟先看 server.log 再猜；正则一律用 r'...' 单引号风格 |
 
 | 22 | 1028 | 冒烟时 curl -d 带中文经 git-bash 变 GBK → Flask get_json 400，误以为服务端 bug | 测试体经 shell 会换编码；服务端未必错 | 冒烟用 ASCII 体或 --data-binary @file；先看原始响应再下结论 |
+
+| 23 | 1028 | 好稿保存后中文变问号——curl 参数体经 Windows argv 按代码页转码（中文→?），OK 响应掩盖了内容损坏 | #22 的 argv 变体：任何非 ASCII 体都可能经 shell→exe 边界被重编码 | 测二进制/UTF-8 体一律 --data-binary @file；生产路径 fetch 无此问题 |

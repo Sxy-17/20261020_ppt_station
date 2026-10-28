@@ -316,6 +316,34 @@ def api_update_request(name: str):
     return jsonify({"ok": True, "updated": hit})
 
 
+@app.post("/api/task/<name>/page/<int:n>/draft")
+def api_save_draft(name: str, n: int):
+    """保存编辑（M4.3）：覆写 draft.svg，写入前备份 .bak，
+    写入后过单页质检门——不过则回滚并报错（坏编辑永不落盘）。"""
+    import subprocess
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    svg_text = request.get_data(as_text=True)
+    if not svg_text.lstrip().startswith("<") or len(svg_text) > 300_000:
+        return jsonify({"error": "内容不像 SVG 或超过 300KB"}), 400
+    f = d / "pages" / f"{n:03d}" / "draft.svg"
+    if not f.exists():
+        return jsonify({"error": "尚未出稿"}), 404
+    bak = f.with_suffix(".svg.bak")
+    bak.write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    f.write_text(svg_text, encoding="utf-8")
+    # 质检门：qc.py 已滤图片待staging类，退出码 0 才算过
+    qc = ROOT / "station" / "qc.py"
+    r = subprocess.run([str(sys.executable), str(qc), str(f)],
+                        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        f.write_text(bak.read_text(encoding="utf-8"), encoding="utf-8")  # 回滚
+        errs = [l.strip()[:160] for l in r.stdout.splitlines() if "ERROR" in l][:5]
+        return jsonify({"error": "质检未过，已回滚", "details": errs}), 422
+    return jsonify({"ok": True})
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=7610)

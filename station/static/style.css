@@ -234,3 +234,5 @@ body.editing #draft-holder svg :is(rect,text,line,path,ellipse,image,g) { cursor
   background:none; }
 .ep-tip { color:var(--text-dim); font-size:11px; border-top:1px solid var(--line);
   padding-top:6px; }
+
+#btn-save { color: var(--pass); }

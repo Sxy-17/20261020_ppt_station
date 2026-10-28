@@ -16,6 +16,48 @@
   btn.title = "编辑模式（M4.1：选中/拖动）";
   document.querySelector(".verdict-group").after(btn);
 
+  const saveBtn = document.createElement("button");
+  saveBtn.id = "btn-save";
+  saveBtn.className = "vbtn";
+  saveBtn.textContent = "保存修改";
+  saveBtn.title = "把编辑烘进几何属性并落盘（过质检门）";
+  saveBtn.onclick = saveDraft;
+  btn.after(saveBtn);
+
+  async function saveDraft() {
+    const svg = svgEl();
+    if (!svg) return;
+    const clone = svg.cloneNode(true);
+    // bake：把 translate 烘进几何属性（质检器不认游离 transform 的页也要过）
+    for (const el of [...clone.querySelectorAll("[transform]")]) {
+      const [tx, ty] = translateOf(el.getAttribute("transform"));
+      if (!tx && !ty) { el.removeAttribute("transform"); continue; }
+      const tag = el.tagName.toLowerCase();
+      const add = (a, dv) => { const v = el.getAttribute(a); if (v !== null) el.setAttribute(a, +v + dv); };
+      if (tag === "rect" || tag === "image") { add("x", tx); add("y", ty); }
+      else if (tag === "text") { add("x", tx); add("y", ty);
+        for (const t of el.querySelectorAll("tspan[x]")) { t.setAttribute("x", +t.getAttribute("x") + tx); } }
+      else if (tag === "line") { add("x1", tx); add("x2", tx); add("y1", ty); add("y2", ty); }
+      else if (tag === "ellipse" || tag === "circle") { add("cx", tx); add("cy", ty); }
+      // path/g/polygon 等保留 transform（导出器可译）
+      else continue;
+      el.removeAttribute("transform");
+    }
+    const text = new XMLSerializer().serializeToString(clone);
+    const p = state.pages[state.cur];
+    const res = await fetch(`/api/task/${state.task}/page/${p.page}/draft`, {
+      method: "POST", headers: { "Content-Type": "image/svg+xml" }, body: text });
+    const data = await res.json();
+    if (!data.ok) {
+      alert("保存被质检门拦下（已回滚，内存编辑保留）：
+" + (data.details || []).join("
+"));
+      return;
+    }
+    ops.length = 0;
+    window.render(state.cur);   // 重新拉取落盘版
+  }
+
   btn.onclick = () => {
     editing = !editing;
     btn.classList.toggle("active", editing);
