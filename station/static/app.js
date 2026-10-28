@@ -17,6 +17,8 @@ async function loadTask(name) {
   const data = await res.json();
   if (data.error) { alert(data.error); return; }
   state.pages = data.pages;
+  state.kind = data.info.kind || "a";
+  document.body.classList.toggle("b-mode", state.kind === "b");
   $("task-name").textContent = `${name}（${data.info.status || "?"}）`;
   buildPageSelect();
   const first = state.pages.findIndex((p) => p.verdict === "") || 0;

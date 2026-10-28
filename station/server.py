@@ -210,6 +210,59 @@ def api_diagnosis(name: str):
     return send_file(f, mimetype="application/json")
 
 
+@app.post("/api/task/new")
+def api_new_task():
+    """创建任务（M6.1）：A=翻新（intake 后自然产生），B=从零（此处建壳）"""
+    body = request.get_json(force=True)
+    name = body.get("name", "")
+    if not name or any(c in name for c in "/\.. "):
+        return jsonify({"error": "任务名非法（字母数字-_）"}), 400
+    kind = body.get("kind", "b")
+    d = PROJECTS / name
+    if d.exists():
+        return jsonify({"error": "任务已存在"}), 400
+    (d / "pages").mkdir(parents=True)
+    now = datetime.now().isoformat(timespec="seconds")
+    (d / "project.json").write_text(json.dumps(
+        {"task": name, "kind": kind, "status": "created", "created": now},
+        ensure_ascii=False, indent=2), encoding="utf-8")
+    if kind == "b":
+        (d / "outline.json").write_text(json.dumps(
+            {"confirmed": False, "pages": []}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+    return jsonify({"ok": True, "task": name})
+
+
+@app.get("/api/task/<name>/outline")
+def api_get_outline(name: str):
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    f = d / "outline.json"
+    return jsonify(json.loads(f.read_text(encoding="utf-8")) if f.exists()
+                   else {"confirmed": False, "pages": []})
+
+
+@app.post("/api/task/<name>/outline")
+def api_put_outline(name: str):
+    """大纲卡片保存（M6.1）：双入口——本页拖排或聊天改，都走这里"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    body = request.get_json(force=True)
+    ol = {"confirmed": bool(body.get("confirmed", False)),
+          "pages": body.get("pages", [])[:200],
+          "ts": datetime.now().isoformat(timespec="seconds")}
+    (d / "outline.json").write_text(
+        json.dumps(ol, ensure_ascii=False, indent=2), encoding="utf-8")
+    if ol["confirmed"]:
+        pjf = d / "project.json"
+        pj = json.loads(pjf.read_text(encoding="utf-8")) if pjf.exists() else {}
+        pj["status"] = "outline-confirmed"
+        pjf.write_text(json.dumps(pj, ensure_ascii=False, indent=2), encoding="utf-8")
+    return jsonify({"ok": True, **ol})
+
+
 @app.get("/api/templates")
 def api_templates():
     """审美库模板卡片（M3.3）：轻量 frontmatter 解析，不引 YAML 依赖。

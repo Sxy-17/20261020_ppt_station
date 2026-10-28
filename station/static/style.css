@@ -262,3 +262,8 @@ body.editing #ed-handle:not([hidden]) { display:block; }
 .ocard { position:relative; }
 
 .ed-guide { position:absolute; background:rgba(31,78,121,.55); pointer-events:none; z-index:3; }
+
+/* ---- M6.1 B 单面板模式：无原图可对，右稿全宽 ---- */
+body.b-mode #panes { grid-template-columns: 1fr; }
+body.b-mode section.pane:first-child { display: none; }
+body.b-mode .vbtn.v-keep, body.b-mode .vbtn.v-redraw { display: none; }
