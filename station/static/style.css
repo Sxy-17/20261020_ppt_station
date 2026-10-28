@@ -247,3 +247,13 @@ body.editing #ed-toolbar { display:flex; }
   border:2px solid #fff; border-radius:50%; cursor:nwse-resize; z-index:6;
   display:none; }
 body.editing #ed-handle:not([hidden]) { display:block; }
+
+/* ---- M4.7 滑杆对比 ---- */
+#cmp-layer { position:absolute; inset:0; overflow:hidden; z-index:4; }
+#cmp-img { height:100%; }
+#cmp-div { position:absolute; top:0; bottom:0; width:2px; background:var(--accent);
+  cursor:ew-resize; }
+#cmp-grip { position:absolute; top:50%; left:-11px; width:24px; height:24px;
+  background:var(--accent); color:#fff; border-radius:50%; display:flex;
+  align-items:center; justify-content:center; font-size:12px; }
+#btn-compare.active { border-color: var(--accent); color: var(--accent); }
