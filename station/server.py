@@ -80,6 +80,13 @@ def api_pages(name: str):
     d = task_dir(name)
     if d is None:
         return jsonify({"error": "任务不存在"}), 404
+    motion_pages = set()
+    anim = d / "animations.json"
+    if anim.exists():
+        try:
+            motion_pages = {int(k) for k in json.loads(anim.read_text(encoding="utf-8")).get("pages", {})}
+        except Exception:  # noqa: BLE001
+            pass
     pages = []
     for pdir in sorted((d / "pages").glob("[0-9]*")):
         if not pdir.is_dir():
@@ -96,6 +103,7 @@ def api_pages(name: str):
             "has_original": (pdir / "original.png").exists(),
             "verdict": v.get("verdict", ""),   # keep|pass|redraw|""
             "star": v.get("star", False),
+            "has_motion": int(pdir.name) in motion_pages,
         })
     info = {}
     if (d / "project.json").exists():

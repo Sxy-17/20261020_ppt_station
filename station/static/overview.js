@@ -78,7 +78,7 @@
           ${p.star ? '<span class="star">★</span>' : ""}
           <span class="pn">P${p.page}</span>
           <span class="ot">${(p.title || p.role || "").slice(0, 14)}</span>
-          ${p.has_draft ? "" : '<span class="nd">⏳</span>'}
+          ${p.has_draft ? "" : '<span class="nd">⏳</span>'}${p.has_motion ? '<span class="nmot">▶</span>' : ""}
         </div>`;
       card.onclick = (ev) => {
         if (ev.shiftKey && anchorIdx >= 0 && anchorIdx !== i) {
