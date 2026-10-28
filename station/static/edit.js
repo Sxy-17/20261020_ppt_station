@@ -269,6 +269,77 @@
     }
   });
 
+  // ---------- M4.6 拖角缩放（右下柄，等比） ----------
+  const handle = document.createElement("div");
+  handle.id = "ed-handle";
+  handle.title = "拖动缩放";
+  holder().appendChild(handle);
+  handle.hidden = true;
+  function placeHandle() {
+    if (!selected) { handle.hidden = true; return; }
+    handle.hidden = false;
+    const r = selected.getBoundingClientRect(), hr = holder().getBoundingClientRect();
+    Object.assign(handle.style, {
+      left: r.left - hr.left + r.width - 7 + "px",
+      top: r.top - hr.top + r.height - 7 + "px",
+    });
+  }
+  const origSync = syncOverlay;
+  syncOverlay = () => { origSync(); placeHandle(); };
+
+  let sizing = false, s0 = null, b0 = null, snap = [];
+  handle.addEventListener("pointerdown", (e) => {
+    e.stopPropagation(); e.preventDefault();
+    if (!selected) return;
+    sizing = true;
+    s0 = { x: e.clientX, y: e.clientY };
+    const r = selected.getBoundingClientRect();
+    b0 = { w: Math.max(r.width, 12), h: Math.max(r.height, 12) };
+    // 快照属性（撤销+回滚用）
+    snap = attrsOf().map(([el, k]) => [el, k, el.getAttribute(k)]);
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (!sizing || !selected) return;
+    const k = Math.max(0.2, Math.min(6, 1 + (e.clientX - s0.x) / b0.w));
+    applyScale(k);
+    syncOverlay();
+  });
+  handle.addEventListener("pointerup", () => {
+    if (!sizing) return;
+    sizing = false;
+    for (const [el, k, old] of snap) {
+      const now = el.getAttribute(k);
+      if (now !== old) ops.push({ type: "attr", el, attr: k, old, new: now });
+    }
+  });
+  function attrsOf() {
+    const t = selected.tagName.toLowerCase(), out = [];
+    const want = { rect: ["x","y","width","height"], image: ["x","y","width","height"],
+      ellipse: ["cx","cy","rx","ry"], circle: ["cx","cy","r"], text: ["font-size"],
+      line: ["x1","y1","x2","y2"] }[t] || [];
+    if (t === "text") out.push([selected, "font-size"]);
+    for (const k of want) out.push([selected, k]);
+    return out;
+  }
+  function applyScale(k) {
+    const el = selected, t = el.tagName.toLowerCase();
+    const g = (a) => parseFloat(el.getAttribute(a));
+    const st = (a, v) => el.setAttribute(a, +(v.toFixed(1)));
+    if (t === "rect" || t === "image") {
+      st("width", g("width") / lastK * k); st("height", g("height") / lastK * k);
+    } else if (t === "ellipse") { st("rx", g("rx") / lastK * k); st("ry", g("ry") / lastK * k); }
+    else if (t === "circle") { st("r", g("r") / lastK * k); }
+    else if (t === "text") { st("font-size", g("font-size") / lastK * k); }
+    else if (t === "line") {
+      st("x2", g("x1") + (g("x2") - g("x1")) / lastK * k);
+      st("y2", g("y1") + (g("y2") - g("y1")) / lastK * k);
+    } else { /* path/g/polygon：留给 ✦美化 */ }
+    lastK = k;
+  }
+  let lastK = 1;
+  handle.addEventListener("pointerdown", () => { lastK = 1; });
+
   // ---------- M4.4 新建/删除/插图 ----------
   const bar = document.createElement("div");
   bar.id = "ed-toolbar";

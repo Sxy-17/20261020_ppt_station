@@ -241,3 +241,9 @@ body.editing #draft-holder svg :is(rect,text,line,path,ellipse,image,g) { cursor
 body.editing #ed-toolbar { display:flex; }
 
 #ed-beautify { color: var(--star); }
+
+/* ---- M4.6 缩放柄 ---- */
+#ed-handle { position:absolute; width:12px; height:12px; background:var(--accent);
+  border:2px solid #fff; border-radius:50%; cursor:nwse-resize; z-index:6;
+  display:none; }
+body.editing #ed-handle:not([hidden]) { display:block; }
