@@ -212,3 +212,11 @@ body[data-mode="overview"] #filmstrip { display:none; }
 .bitem .bp { font-weight:600; color:var(--text); }
 .bitem .bt { color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bempty { color:var(--text-dim); font-size:12px; padding:8px; text-align:center; }
+
+/* ---- M4.1 编辑器 ---- */
+#draft-holder { position: relative; }
+#ed-overlay { position:absolute; pointer-events:none; border:1.5px dashed var(--accent);
+  border-radius:2px; box-shadow:0 0 0 1px rgba(194,94,0,.25); z-index:5; }
+body.editing #draft-holder svg { cursor: grab; }
+body.editing #draft-holder svg :is(rect,text,line,path,ellipse,image,g) { cursor: grab; }
+#btn-edit.active { border-color: var(--accent); color: var(--accent); }
