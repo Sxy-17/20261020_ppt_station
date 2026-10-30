@@ -15,7 +15,13 @@
 ## 环境要求
 
 - Windows，已安装 PowerPoint（旧格式转换与逐页截图依赖本机 Office）
-- 克隆本仓库后拉取引擎（约 70MB，一次即可）：
+- 推荐克隆方式（主仓与引擎均为浅克隆，约 70MB）：
+
+```bash
+git clone --depth 1 --recurse-submodules --shallow-submodules <本仓库地址>
+```
+
+- 已克隆但引擎缺失时（报"引擎未拉取"即此原因）：
 
 ```bash
 git submodule update --init --depth 1 ppt-master
