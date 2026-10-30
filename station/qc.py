@@ -19,15 +19,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "ppt-master/skills/ppt-master/scripts/svg_quality_checker.py"
+PM = ROOT / "ppt-master"
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+
+
+def ensure_engine() -> str:
+    """引擎存在性守卫：submodule 未拉取时给修复命令，而不是裸异常（浅克隆场景）"""
+    probe = PM / "scripts" / "svg_to_pptx.py"
+    if not probe.exists():
+        print("✗ ppt-master 引擎未拉取（submodule 为空）。修复：")
+        print("    git submodule update --init --depth 1 ppt-master")
+        sys.exit(3)
+    return str(PM)
 
 
 def check_one(svg: Path) -> list[str]:
     """返回该文件的 blocking 错误行（空列表=过）。
     图片引用缺失不报：draft 的 ../images/ 引用在导出 staging 时才拷贝成立
     （export.py 负责），生成循环预检阶段属预期缺失，不属画图错误。"""
+    if not CHECKER.exists():
+        print("✗ ppt-master 引擎未拉取（submodule 为空）。修复：")
+        print("    git submodule update --init --depth 1 ppt-master")
+        return ["引擎未安装"]
     proc = subprocess.run(
         [str(sys.executable), str(CHECKER), str(svg), "--stage", "final"],
         capture_output=True, text=True, encoding="utf-8", errors="replace")

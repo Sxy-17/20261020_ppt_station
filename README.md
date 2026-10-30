@@ -15,6 +15,11 @@
 ## 环境要求
 
 - Windows，已安装 PowerPoint（旧格式转换与逐页截图依赖本机 Office）
+- 克隆本仓库后拉取引擎（约 70MB，一次即可）：
+
+```bash
+git submodule update --init --depth 1 ppt-master
+```
 - Python 3.10+；首次初始化虚拟环境：
 
 ```bash

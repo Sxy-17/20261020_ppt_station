@@ -31,6 +31,17 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 
+
+def ensure_engine() -> str:
+    """引擎存在性守卫：submodule 未拉取时给修复命令，而不是裸异常（浅克隆场景）"""
+    probe = PM / "scripts" / "svg_to_pptx.py"
+    if not probe.exists():
+        print("✗ ppt-master 引擎未拉取（submodule 为空）。修复：")
+        print("    git submodule update --init --depth 1 ppt-master")
+        sys.exit(3)
+    return str(PM)
+
+
 def run_engine(script: str, args: list[str]) -> subprocess.CompletedProcess:
     """调引擎脚本：统一 .venv python + 绝对路径；失败时把尾部输出给用户看"""
     cmd = [str(sys.executable), str(PM / "scripts" / script)] + [str(a) for a in args]
@@ -61,6 +72,7 @@ def main() -> int:
         return 2
 
     # staging：引擎期望的项目形态。重建前先点名确认是自己的工作区（R2）
+    ensure_engine()
     stage = task_dir / ".export"
     if stage.exists():
         shutil.rmtree(stage)  # .export 是导出器私有暂存，整目录重建安全

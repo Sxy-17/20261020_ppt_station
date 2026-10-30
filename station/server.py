@@ -393,6 +393,8 @@ def api_save_draft(name: str, n: int):
     d = task_dir(name)
     if d is None:
         return jsonify({"error": "任务不存在"}), 404
+    if not (ROOT / "ppt-master/skills/ppt-master/scripts/svg_to_pptx.py").exists():
+        return jsonify({"error": "引擎未拉取：git submodule update --init --depth 1 ppt-master"}), 503
     svg_text = request.get_data(as_text=True)
     if not svg_text.lstrip().startswith("<") or len(svg_text) > 300_000:
         return jsonify({"error": "内容不像 SVG 或超过 300KB"}), 400
@@ -404,6 +406,8 @@ def api_save_draft(name: str, n: int):
     f.write_text(svg_text, encoding="utf-8")
     # 质检门：qc.py 已滤图片待staging类，退出码 0 才算过
     qc = ROOT / "station" / "qc.py"
+    if not qc.exists():
+        return jsonify({"error": "qc.py 缺失"}), 500
     r = subprocess.run([str(sys.executable), str(qc), str(f)],
                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
