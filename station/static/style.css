@@ -276,3 +276,8 @@ body.b-mode .vbtn.v-keep, body.b-mode .vbtn.v-redraw { display: none; }
 .ol-card input, .ol-card select { background:var(--panel-2); color:var(--text);
   border:1px solid var(--line); border-radius:5px; padding:5px 8px; font-size:13px; width:100%; }
 .ol-title { font-weight:600; }
+
+.tprev { margin: -2px -4px 8px; border-radius: 6px; overflow: hidden;
+  border: 1px solid var(--line); background: #fff; }
+.tprev img { width: 100%; display: block; }
+.tpl-card { min-width: 220px; }

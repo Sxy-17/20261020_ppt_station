@@ -30,7 +30,9 @@ let templates = [];
     card.className = "tpl-card" + (i === 0 ? " active" : "");
     const swatches = Object.values(t.palette).slice(0, 6)
       .map((c) => `<span class="swatch" style="background:${c}"></span>`).join("");
-    card.innerHTML = `<div class="swatches">${swatches}</div>
+    const prev = t.preview
+      ? `<div class="tprev"><img src="${t.preview}" alt="${t.name} 样张"></div>` : "";
+    card.innerHTML = `${prev}<div class="swatches">${swatches}</div>
       <div class="tname">${t.name}${i === 0 ? " ◆" : ""}</div>
       <div class="tcat">${t.category}</div>`;
     card.onclick = () => {

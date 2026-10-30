@@ -206,6 +206,12 @@ def api_verdicts(name: str):
     return jsonify({"ok": True, "written": written})
 
 
+@app.get("/aesthetics/previews/<path:fn>")
+def aesthetics_preview(fn: str):
+    """审美库样张（随库迁移的派生资产）"""
+    return send_from_directory(ROOT / "library" / "aesthetics" / "previews", fn)
+
+
 @app.get("/api/task/<name>/diagnosis")
 def api_diagnosis(name: str):
     """选择页诊断区数据（M3.3）"""
@@ -290,9 +296,11 @@ def api_templates():
                 mm = re.match(r'\s*(\w+):\s*"?#?([0-9A-Fa-f]{0,8})', ln)
                 if mm and mm.group(2):
                     palette[mm.group(1)] = "#" + mm.group(2).upper()
+        prev = ROOT / "library/aesthetics/previews" / f"{f.stem}.svg"
         out.append({"id": field("id") or f.stem, "name": field("name"),
                     "category": field("category"), "applies": field("applies"),
-                    "palette": palette})
+                    "palette": palette,
+                    "preview": f"/aesthetics/previews/{f.stem}.svg" if prev.exists() else ""})
     return jsonify(out)
 
 
