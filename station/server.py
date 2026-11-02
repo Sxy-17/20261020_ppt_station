@@ -136,12 +136,15 @@ def api_pages(name: str):
         meta_f = pdir / "meta.json"
         meta = json.loads(meta_f.read_text(encoding="utf-8")) if meta_f.exists() else {}
         v = read_verdict(pdir)
+        draft = pdir / "draft.svg"
         pages.append({
             "page": int(pdir.name),
             "title": meta.get("title", ""),
             "role": meta.get("role_guess", ""),
             "suggest": meta.get("suggest", ""),
-            "has_draft": (pdir / "draft.svg").exists(),
+            "has_draft": draft.exists(),
+            # 毫秒级修改时间：前端靠它发现"稿被别人改了"（旧版只看有没有稿，agent 改稿后右栏不刷新，诊断 #6）
+            "draft_mtime": draft.stat().st_mtime_ns // 1_000_000 if draft.exists() else 0,
             "has_original": (pdir / "original.png").exists(),
             "verdict": v.get("verdict", ""),   # keep|pass|redraw|""
             "star": v.get("star", False),
@@ -361,8 +364,10 @@ def api_selection(name: str):
 import subprocess as _sp
 import threading as _th
 
-# 生成状态（内存即可：重启后读 draft 数判断）
-_gen_status = {"running": False, "last_output": ""}
+# 生成状态按任务分开记（内存即可：重启后读 draft 数判断）。
+# 旧版是全局一份：A 任务在跑时 B 任务也显示"生成中"，且 B 无法启动（诊断 #12）
+_gen_status: dict[str, dict] = {}
+_gen_lock = _th.Lock()
 
 
 @app.post("/api/task/<name>/generate")
@@ -371,10 +376,12 @@ def api_generate(name: str):
     d = task_dir(name)
     if d is None:
         return jsonify({"error": "任务不存在"}), 404
-    if _gen_status["running"]:
-        return jsonify({"error": "生成进行中", "output": _gen_status["last_output"][:500]}), 409
-    _gen_status["running"] = True
-    _gen_status["last_output"] = ""
+    with _gen_lock:   # 检查+置位要原子：两次快速点击不能起两个进程
+        st = _gen_status.setdefault(name, {"running": False, "last_output": ""})
+        if st["running"]:
+            return jsonify({"error": "生成进行中", "output": st["last_output"][:500]}), 409
+        st["running"] = True
+        st["last_output"] = ""
 
     def run():
         try:
@@ -382,11 +389,13 @@ def api_generate(name: str):
                 [sys.executable, str(ROOT / "station" / "prep" / "batch_draft.py"), str(d)],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 cwd=str(ROOT), timeout=600)
-            _gen_status["last_output"] = (r.stdout + r.stderr)[-2000:]
+            st["last_output"] = (r.stdout + r.stderr)[-2000:]
+            st["returncode"] = r.returncode
         except Exception as exc:  # noqa: BLE001
-            _gen_status["last_output"] = f"生成失败：{exc}"
+            st["last_output"] = f"生成失败：{exc}"
+            st["returncode"] = -1
         finally:
-            _gen_status["running"] = False
+            st["running"] = False
 
     _th.Thread(target=run, daemon=True).start()
     return jsonify({"ok": True, "message": "批量出稿已启动（生成中，页面会逐页亮起）"})
@@ -402,9 +411,10 @@ def api_generate_status(name: str):
             total += 1
             if (p / "draft.svg").exists():
                 draft_count += 1
-    return jsonify({"running": _gen_status["running"],
+    st = _gen_status.get(name, {"running": False, "last_output": ""})
+    return jsonify({"running": st["running"], "returncode": st.get("returncode"),
                     "drafts": draft_count, "total": total,
-                    "output": _gen_status["last_output"][-500:]})
+                    "output": st["last_output"][-500:]})
 
 
 REQ_FILE = "pending_requests.jsonl"

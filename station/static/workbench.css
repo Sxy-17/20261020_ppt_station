@@ -35,6 +35,15 @@ input { font: inherit; color: inherit; }
 .cell.pending::after { content: ""; position: absolute; top: -6px; left: 50%; width: 4px; height: 4px;
   margin-left: -2px; border-radius: 50%; background: var(--accent); }
 #tally { color: var(--dim); white-space: nowrap; }
+#more { width: 32px; height: 28px; border-radius: 4px; color: var(--dim); font-size: 16px; letter-spacing: 1px; }
+#more:hover { background: var(--surface-2); color: var(--text); }
+#menu { position: fixed; top: 40px; right: 12px; z-index: 30; min-width: 230px; padding: 6px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,.4); }
+#menu button { display: flex; justify-content: space-between; gap: 16px; width: 100%; padding: 7px 10px;
+  border-radius: 4px; text-align: left; }
+#menu button:hover:not(:disabled) { background: var(--line); }
+#menu button:disabled { color: var(--faint); cursor: default; }
+#menu .k { color: var(--faint); }
 
 /* ---------- 双栏 ---------- */
 #main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px; min-height: 0; }

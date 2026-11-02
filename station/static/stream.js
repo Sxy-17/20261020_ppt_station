@@ -1,47 +1,94 @@
-/* 工作台的唯一轮询（PLAN §8.5 stream.js）
-   R3：意见队列 —— 发现 agent 新完成的意见 → 横幅提醒；当前页被改了就重载并闪一下。
-   规矩：这里只读服务器、更新 state、调用 workbench.js 的绘制函数，从不改写 render（诊断 #7）。 */
+/* 工作台的唯一轮询（PLAN §8.5 stream.js），每 3 秒一轮，顺序固定：
+     ① 页清单：新出的稿点亮页带；当前页的稿在盘上变了才重载右栏（看 draft_mtime）
+     ② 意见队列：发现 agent 新完成的意见 → 横幅
+     ③ 一键出稿进度（只在出稿中查）
+   铁律：后台永不打断前台——不跳页；不重载当前页，除非①当前页正处于"生成中"等待态，
+   或②当前页的稿真的被换了（agent 改完）。旧版每出一页就整体重载并跳回第一个未裁决页（诊断 #3）。
+   这里只读服务器、更新 state、调用 workbench.js 的绘制函数，从不改写 render（诊断 #7）。 */
 "use strict";
 
 (function () {
   const INTERVAL = 3000;
   let seenDone = null;   // 已知完成的意见 ts；null = 还没建立基线（首轮只记账不弹，避免历史 done 刷屏）
+  let busy = false;      // 上一轮还没回来就不发下一轮（服务器慢时请求不堆积）
+
+  async function pollPages() {
+    const d = await (await fetch(api("/pages"), { cache: "no-store" })).json();
+    if (!d.pages || !state.pages.length) return;
+    const cur = state.pages[state.cur];
+    const byPage = new Map(state.pages.map((p) => [p.page, p]));
+
+    // 原地更新字段（对象引用不变，别处持有的 p 也跟着新）；页数变了才整体替换并按页号找回当前页
+    if (d.pages.length === state.pages.length && d.pages.every((p) => byPage.has(p.page))) {
+      for (const np of d.pages) Object.assign(byPage.get(np.page), np);
+    } else {
+      state.pages = d.pages;
+      const i = state.pages.findIndex((p) => p.page === cur.page);
+      state.cur = i >= 0 ? i : 0;
+    }
+
+    const now = state.pages[state.cur];
+    const shownMtime = state.shown[now.page];
+    if (now.has_draft && shownMtime === undefined && $("svgbox").innerHTML === "") {
+      render();                                   // 正在等的这一页出稿了
+    } else if (now.has_draft && shownMtime !== undefined && now.draft_mtime !== shownMtime) {
+      // 盘上的稿比右栏显示的新（agent 改完）。
+      // R5 编辑器上线后：有未保存修改时这里改为横幅二选一「载入新稿 / 保留我的修改」，不自动载入
+      await render();
+      flash();
+    } else {
+      drawTop(); drawVerdicts();                  // 只刷新页带和裁决键（聊天里裁决的也会同步过来）
+    }
+  }
 
   async function pollRequests() {
-    let reqs;
-    try {
-      reqs = await (await fetch(api("/requests"), { cache: "no-store" })).json();
-    } catch { return; }  // 服务重启间隙静默跳过，下一轮再来
+    const reqs = await (await fetch(api("/requests"), { cache: "no-store" })).json();
     if (!Array.isArray(reqs)) return;
     state.requests = reqs;
-
     const done = reqs.filter((r) => r.status === "done");
     const fresh = seenDone ? done.filter((r) => !seenDone.has(r.ts)) : [];
     seenDone = new Set(done.map((r) => r.ts));
-
     if (fresh.length) onDone(fresh);
-    if (state.pages.length) { drawTop(); drawOpinion(); }
+    drawTop(); drawOpinion();
   }
 
   function onDone(fresh) {
     const last = fresh[fresh.length - 1];
     const more = fresh.length > 1 ? `（另有 ${fresh.length - 1} 条也已完成）` : "";
-    const quote = (last.text || "重绘").slice(0, 24);
-    const cur = state.pages[state.cur];
+    const text = `P${last.page} 已按意见改好：「${(last.text || "重绘").slice(0, 24)}」${more}`;
+    const here = state.pages[state.cur].page === last.page;
+    const i = state.pages.findIndex((p) => p.page === last.page);
+    // 右栏重载不在这里做：只有稿的 mtime 变了才重载（pollPages 负责），避免"标了完成但稿没变"也闪
+    banner(text, !here && i >= 0 ? [["查看", () => go(i)]] : []);
+  }
 
-    // 当前页被 agent 改了：直接载入新稿并闪一下。
-    // 编辑器上线（R5）后这里要先看有没有未保存修改，有就改成"载入新稿 / 保留我的修改"二选一
-    if (fresh.some((r) => r.page === cur.page)) {
-      render().then(flash);
-    }
-    if (last.page === cur.page) {
-      banner(`P${last.page} 已按意见改好：「${quote}」${more}`);
-    } else {
-      const i = state.pages.findIndex((p) => p.page === last.page);
-      banner(`P${last.page} 已按意见改好：「${quote}」${more}`, i >= 0 ? [["查看", () => go(i)]] : []);
+  async function pollGen() {
+    if (!state.gen || !state.gen.running) return;
+    const g = await (await fetch(api("/generate/status"), { cache: "no-store" })).json();
+    const wasRunning = state.gen.running;
+    state.gen = g;
+    if (wasRunning && !g.running) {
+      if (g.returncode === 0) banner(`出稿完成：${g.drafts}/${g.total} 页已有稿`);
+      else banner(`出稿中断（${g.drafts}/${g.total}）：${(g.output || "").split("\n").filter(Boolean).pop() || "见服务器日志"}`, [], 15000);
     }
   }
 
-  pollRequests();
-  setInterval(pollRequests, INTERVAL);
+  async function tick() {
+    if (busy || !state.pages.length) return;
+    busy = true;
+    try {
+      await pollPages();
+      await pollRequests();
+      await pollGen();
+    } catch { /* 服务重启间隙静默跳过，下一轮再来 */ }
+    finally { busy = false; }
+  }
+
+  // 首轮：等 load() 把页清单拿到再开始；队列基线也在首轮建立
+  const boot = setInterval(() => {
+    if (!state.pages.length) return;
+    clearInterval(boot);
+    tick();
+    setInterval(tick, INTERVAL);
+  }, 200);
 })();

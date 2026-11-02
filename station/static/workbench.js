@@ -13,6 +13,8 @@ const state = {
   cur: 0,         // 当前页在 pages 里的下标
   seq: 0,         // 渲染序号：只有最新一次 render 的响应能写进右栏（防翻页竞态，诊断 #4）
   requests: [],   // 意见队列（pending_requests.jsonl），stream.js 定时刷新
+  shown: {},      // 页号 → 右栏当前显示的稿的 draft_mtime；stream.js 据此判断"盘上的稿比显示的新"
+  gen: null,      // 一键出稿状态（/generate/status），stream.js 刷新
   ratio: { orig: 4 / 3, draft: 16 / 9 },   // 两栏画幅，加载后按真实尺寸更新
 };
 
@@ -68,6 +70,7 @@ async function render() {
   }
   $("svgbox").innerHTML = await r.text();
   $("wait").hidden = true;
+  state.shown[p.page] = p.draft_mtime;
   const svg = $("svgbox").querySelector("svg");
   const vb = svg && svg.viewBox.baseVal;
   if (vb && vb.width && vb.height) state.ratio.draft = vb.width / vb.height;
@@ -289,6 +292,40 @@ function flash() {
   void s.offsetWidth;                // 强制重排，让动画能重复触发
   s.classList.add("flash");
 }
+
+/* ---------- ⋯ 菜单：一键出稿 / 导出状态 / 快捷键 ---------- */
+function drawMenu() {
+  const g = state.gen, btn = document.querySelector('#menu [data-act="gen"]');
+  const missing = state.pages.filter((p) => !p.has_draft).length;
+  btn.disabled = (g && g.running) || missing === 0;
+  $("gen-state").textContent = g && g.running ? "生成中…" : missing ? `${missing} 页待出` : "已全部出稿";
+}
+
+$("more").onclick = (e) => { e.stopPropagation(); drawMenu(); $("menu").hidden = !$("menu").hidden; };
+document.addEventListener("click", (e) => { if (!$("menu").contains(e.target)) $("menu").hidden = true; });
+
+$("menu").onclick = async (e) => {
+  const a = e.target.closest("[data-act]");
+  if (!a || a.disabled) return;
+  $("menu").hidden = true;
+  const act = a.dataset.act;
+  if (act === "gen") {
+    const r = await fetch(api("/generate"), { method: "POST" });
+    const d = await r.json();
+    if (!d.ok) { say(`没能开始出稿：${d.error}`, true); return; }
+    state.gen = { running: true };
+    // 只点亮页带，不跳页、不重载当前页（PLAN §8.4"后台永不打断前台"）
+    banner("后台出稿中：页带会逐格点亮，不会打断你正在看的页");
+  } else if (act === "export") {
+    const left = state.pages.filter((p) => !p.verdict).map((p) => "P" + p.page);
+    const redraw = state.pages.filter((p) => p.verdict === "redraw").map((p) => "P" + p.page);
+    if (left.length) banner(`还有 ${left.length} 页未裁决：${left.slice(0, 8).join("、")}${left.length > 8 ? "…" : ""}`, [], 12000);
+    else if (redraw.length) banner(`${redraw.length} 页标了重绘、等 agent 重画：${redraw.slice(0, 8).join("、")}`, [], 12000);
+    else banner("全部已裁决 · 在聊天里说「导出」生成 .pptx", [], 12000);
+  } else if (act === "keys") {
+    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 点页码输入跳页 · 意见框回车提交", [], 15000);
+  }
+};
 
 /* ---------- 键盘 ---------- */
 document.addEventListener("keydown", (e) => {

@@ -13,7 +13,14 @@
   <span id="pageno" title="点击输入页码跳转"></span>
   <div id="strip"></div>
   <span id="tally"></span>
+  <button id="more" title="更多">···</button>
 </header>
+<!-- 低频动作只放这里（PLAN §8.3）：主界面不常驻 -->
+<div id="menu" hidden>
+  <button data-act="gen">一键出稿（剩余页）<span class="k" id="gen-state"></span></button>
+  <button data-act="export">导出状态</button>
+  <button data-act="keys">快捷键</button>
+</div>
 
 <main id="main">
   <section class="pane" id="orig-pane">
