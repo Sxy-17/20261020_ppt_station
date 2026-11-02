@@ -45,9 +45,10 @@
     const reqs = await (await fetch(api("/requests"), { cache: "no-store" })).json();
     if (!Array.isArray(reqs)) return;
     state.requests = reqs;
+    // 按 id 认条目：ts 只到秒，同一秒两条会被当成一条（服务器给旧记录补了 id=ts）
     const done = reqs.filter((r) => r.status === "done");
-    const fresh = seenDone ? done.filter((r) => !seenDone.has(r.ts)) : [];
-    seenDone = new Set(done.map((r) => r.ts));
+    const fresh = seenDone ? done.filter((r) => !seenDone.has(r.id)) : [];
+    seenDone = new Set(done.map((r) => r.id));
     if (fresh.length) onDone(fresh);
     drawTop(); drawOpinion();
   }
@@ -55,7 +56,9 @@
   function onDone(fresh) {
     const last = fresh[fresh.length - 1];
     const more = fresh.length > 1 ? `（另有 ${fresh.length - 1} 条也已完成）` : "";
-    const text = `P${last.page} 已按意见改好：「${(last.text || "重绘").slice(0, 24)}」${more}`;
+    const text = last.text
+      ? `P${last.page} 已按意见改好：「${last.text.slice(0, 24)}」${more}`
+      : `P${last.page} 已重绘完成${more}`;
     const here = state.pages[state.cur].page === last.page;
     const i = state.pages.findIndex((p) => p.page === last.page);
     // 右栏重载不在这里做：只有稿的 mtime 变了才重载（pollPages 负责），避免"标了完成但稿没变"也闪

@@ -22,6 +22,11 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
+# 与 agent 命令行工具共用的写入口（同在 station/ 下；以脚本运行时本目录已在 sys.path）
+import draft_store
+import req_queue
+from locks import LockBusy
+
 ROOT = Path(__file__).resolve().parents[1]  # station/ 的上一级=工作区根（注意与 prep/ 下脚本差一层，教训#20）
 PROJECTS = ROOT / "projects"
 
@@ -144,7 +149,7 @@ def api_pages(name: str):
             "suggest": meta.get("suggest", ""),
             "has_draft": draft.exists(),
             # 毫秒级修改时间：前端靠它发现"稿被别人改了"（旧版只看有没有稿，agent 改稿后右栏不刷新，诊断 #6）
-            "draft_mtime": draft.stat().st_mtime_ns // 1_000_000 if draft.exists() else 0,
+            "draft_mtime": draft_store.mtime_of(draft),
             "has_original": (pdir / "original.png").exists(),
             "verdict": v.get("verdict", ""),   # keep|pass|redraw|""
             "star": v.get("star", False),
@@ -202,7 +207,17 @@ def api_verdict(name: str, n: int):
     }
     (pdir / "verdict.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    sync_redraw_queue(d, n, old.get("verdict", ""), verdict)
     return jsonify({"ok": True, **data})
+
+
+def sync_redraw_queue(d: Path, page: int, old: str, new: str) -> None:
+    """「重绘」裁决同时进意见队列（PLAN §8.4）：agent 值守时一并领走，不用另找 verdict.json 扫。
+    撤销重绘 → 作废还没被领走的那条（已领走的让 agent 做完，结果用户可再裁决）。"""
+    if new == "redraw" and old != "redraw":
+        req_queue.add(d, page, "", type_="redraw")
+    elif old == "redraw" and new != "redraw":
+        req_queue.cancel_redraw(d, page)
 
 
 @app.post("/api/task/<name>/verdicts")
@@ -231,6 +246,7 @@ def api_verdicts(name: str):
                 "ts": datetime.now().isoformat(timespec="seconds")}
         (pdir / "verdict.json").write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        sync_redraw_queue(d, data["page"], old.get("verdict", ""), verdict)
         written.append(data)
     # 审计：谁在什么时候批量动了哪些页（batch_log.jsonl，追加式）
     if body.get("log_action"):
@@ -417,32 +433,9 @@ def api_generate_status(name: str):
                     "output": st["last_output"][-500:]})
 
 
-REQ_FILE = "pending_requests.jsonl"
-
-
-def read_requests(d: Path) -> list[dict]:
-    """读意见队列（坏行跳过不炸）"""
-    f = d / REQ_FILE
-    if not f.exists():
-        return []
-    out = []
-    for ln in f.read_text(encoding="utf-8").splitlines():
-        try:
-            out.append(json.loads(ln))
-        except Exception:  # noqa: BLE001
-            continue
-    return out
-
-
-def write_requests(d: Path, reqs: list[dict]):
-    with open(d / REQ_FILE, "w", encoding="utf-8") as f:
-        for r in reqs:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-
-
 @app.post("/api/task/<name>/page/<int:n>/request")
 def api_add_request(name: str, n: int):
-    """意见入队（M3.5a）：与聊天同一队列（双入口单队列）"""
+    """意见入队（M3.5a）：与聊天同一队列（双入口单队列）；读写全走 req_queue（持锁）"""
     d = task_dir(name)
     if d is None:
         return jsonify({"error": "任务不存在"}), 404
@@ -450,11 +443,7 @@ def api_add_request(name: str, n: int):
     text = (body.get("text") or "").strip()
     if not text:
         return jsonify({"error": "意见为空"}), 400
-    req = {"ts": datetime.now().isoformat(timespec="seconds"),
-           "page": n, "text": text[:500], "status": "queued"}
-    with open(d / REQ_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(req, ensure_ascii=False) + "\n")
-    return jsonify({"ok": True, **req})
+    return jsonify({"ok": True, **req_queue.add(d, n, text)})
 
 
 @app.get("/api/task/<name>/requests")
@@ -462,68 +451,43 @@ def api_requests(name: str):
     d = task_dir(name)
     if d is None:
         return jsonify({"error": "任务不存在"}), 404
-    return jsonify(read_requests(d))
+    return jsonify(req_queue.read_all(d))
 
 
 @app.post("/api/task/<name>/requests/update")
 def api_update_request(name: str):
-    """状态更新（agent 消化完回写 done；也允许撤销 queued）"""
+    """状态更新：按 id 改（旧调用方只传 ts 时用 ts 兜底——旧记录的 id 就是 ts）"""
     d = task_dir(name)
     if d is None:
         return jsonify({"error": "任务不存在"}), 404
     body = request.get_json(force=True)
-    ts, status = body.get("ts"), body.get("status", "done")
-    reqs = read_requests(d)
-    hit = 0
-    for r in reqs:
-        if r.get("ts") == ts:
-            r["status"] = status
-            r["done_ts"] = datetime.now().isoformat(timespec="seconds")
-            hit += 1
-    if not hit:
+    status = body.get("status", "done")
+    if status not in ("queued", "working", "done", "cancelled"):
+        return jsonify({"error": f"非法状态：{status}"}), 400
+    key = body.get("id") or body.get("ts")
+    n = req_queue.set_status(d, [key], status) if key else 0
+    if not n:
         return jsonify({"error": "未找到该条"}), 404
-    write_requests(d, reqs)
-    return jsonify({"ok": True, "updated": hit})
+    return jsonify({"ok": True, "updated": n})
 
 
 @app.post("/api/task/<name>/page/<int:n>/draft")
 def api_save_draft(name: str, n: int):
-    """保存编辑（M4.3）：覆写 draft.svg，写入前备份 .bak，
-    写入后过单页质检门——不过则回滚并报错（坏编辑永不落盘）。"""
-    import subprocess
+    """保存编辑：与 agent 改稿走同一个写入口（draft_store.write_draft，PLAN §8.6）。
+    请求头 X-Base-Mtime = 编辑起点那份稿的版本号；盘上已不是它 → 409，前端让用户二选一。"""
     d = task_dir(name)
     if d is None:
         return jsonify({"error": "任务不存在"}), 404
     if not (ROOT / "ppt-master/skills/ppt-master/scripts/svg_to_pptx.py").exists():
         return jsonify({"error": "引擎未拉取：git submodule update --init --depth 1 ppt-master"}), 503
-    svg_text = request.get_data(as_text=True)
-    if not svg_text.lstrip().startswith("<") or len(svg_text) > 300_000:
-        return jsonify({"error": "内容不像 SVG 或超过 300KB"}), 400
-    f = d / "pages" / f"{n:03d}" / "draft.svg"
-    if not f.exists():
-        return jsonify({"error": "尚未出稿"}), 404
-    bak = f.with_suffix(".svg.bak")
-    bak.write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
-    f.write_text(svg_text, encoding="utf-8")
-    # 质检门：qc.py 已滤图片待staging类，退出码 0 才算过
-    qc = ROOT / "station" / "qc.py"
-    if not qc.exists():
-        return jsonify({"error": "qc.py 缺失"}), 500
-    r = subprocess.run([str(sys.executable), str(qc), str(f)],
-                        capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if r.returncode != 0:
-        f.write_text(bak.read_text(encoding="utf-8"), encoding="utf-8")  # 回滚
-        errs = [l.strip()[:160] for l in r.stdout.splitlines() if "ERROR" in l][:5]
-        return jsonify({"error": "质检未过，已回滚", "details": errs}), 422
-    # 版本历史：留最近 10 份（用户改错随时回退——M4.9）
-    vdir = f.parent / "versions"
-    vdir.mkdir(exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    (vdir / f"{stamp}.svg").write_text(svg_text, encoding="utf-8")
-    olds = sorted(vdir.glob("*.svg"))
-    for o in olds[:-10]:
-        o.unlink()
-    return jsonify({"ok": True})
+    base = request.headers.get("X-Base-Mtime", "")
+    try:
+        res = draft_store.write_draft(d / "pages" / f"{n:03d}", request.get_data(as_text=True),
+                                      int(base) if base.isdigit() else None)
+    except LockBusy:
+        return jsonify({"error": "这一页正在被另一方写入，稍后重试"}), 503
+    code = 200 if res["ok"] else res.pop("code")
+    return jsonify(res), code
 
 
 @app.get("/api/task/<name>/page/<int:n>/versions")

@@ -226,8 +226,9 @@ function drawOpinion() {
   const p = state.pages[state.cur];
   if (!p) return;
   const n = pendingOf(p.page);
+  const working = state.requests.some((r) => r.page === p.page && r.status === "working");
   $("op-state").className = n ? "busy" : "";
-  $("op-state").textContent = n ? `已交给 agent · 处理中 ${n} 条` : "";
+  $("op-state").textContent = !n ? "" : working ? `agent 正在改这页（${n} 条）` : `已交给 agent · 排队 ${n} 条`;
 }
 
 let sending = false;

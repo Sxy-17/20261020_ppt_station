@@ -59,6 +59,16 @@ metadata:
    - **流式交付与初稿质量定位**：出稿逐页落盘（draft.svg 写完即亮，M3 工作台监听新页），用户从 P1 开始审，审比产出快是常态；初稿是 **80 分快照**——结构对、语义全、模板语汇、无硬伤，细节对齐/间距/字重不精雕（留给用户 Direct edit 或意见框点名）；agent 精雕力只花在用户付过注意力的页
 5. **工作台审核**（M3+）：双面板（左原图/右新稿），裁决三选一（保留原样=保底贴图/通过/重绘），★回看旗标，批量裁决，意见框异步流水线，✦AI美化选中——UX 基准见 PLAN §2.3A；M3 之前用聊天裁决（说"P5 通过"即写 verdict.json）
 6. **循环消化**：`pending_requests.jsonl` 队列（意见框与聊天双入口单队列），改完横幅提醒
+   - **写稿铁律（PLAN §8.6）**：已有稿的页**不许直接写** `draft.svg`（用户可能正在网页里改同一页），一律走统一写入口：
+     先 `.venv/Scripts/python station/prep/write_draft.py <task_dir> <页> --mtime` 记版本号 → 新稿写到 `tmp/` 下 →
+     `write_draft.py <task_dir> <页> <新稿.svg> --base-mtime <版本号>`。退出码 3 = 用户刚改过：重新读稿、在新稿上改再提交；4 = 质检没过（原稿未动）
+   - **值守模式**（出稿后、或用户说"盯着工作台"时进入）：循环执行
+     ① `.venv/Scripts/python station/prep/wait_requests.py <task_dir> --timeout 600` 阻塞等活（退出 0 = 领到一页的全部意见，JSON 里有 `draft_mtime`；退出 2 = 10 分钟没新活，结束值守，告诉用户"在聊天里说继续可再接"）
+     ② 读 `original` / `draft` / 意见原话，改稿，经 `write_draft.py --base-mtime <JSON 里的 draft_mtime>` 落盘
+     ③ `wait_requests.py <task_dir> --done <id...>` 标完成（网页 3 秒内出横幅）→ 回到 ①
+     - `type=redraw` = 用户按了「3 重绘」（text 可能为空）：照原图拓扑重画（R15：必须有视觉；无视觉会话 `--release <id>` 放回并告诉用户）
+     - 用户意见优先于 agent 自己的重绘活；值守中用户在聊天里说话，先回应用户
+     - 批量出稿走后台（工作台 ⋯ 一键出稿，或另起进程跑 `batch_draft.py`），不占值守循环
 
 ## 4. B·从零（M6，先记形态）
 
@@ -87,7 +97,8 @@ projects/<任务>/
     original.png / text.md / meta.json   # 准备链产物
     draft.svg                          # 当前稿（唯一中间形式）
     verdict.json                       # 裁决：keep(保留原样)|pass(通过)|redraw(重绘) + star(★)
-  pending_requests.jsonl  # 意见队列（追加式）
+  pending_requests.jsonl  # 意见队列：每条 id/page/type(opinion|redraw)/text/status(queued→working→done|cancelled)
+                          # 只经 station/req_queue.py 读写（持锁）；agent 用 wait_requests.py，别手改
   batch_log.jsonl         # 批量操作审计
   exports/                # 成品
 ```
