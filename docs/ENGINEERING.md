@@ -68,3 +68,5 @@
 | 22 | 1028 | 冒烟时 curl -d 带中文经 git-bash 变 GBK → Flask get_json 400，误以为服务端 bug | 测试体经 shell 会换编码；服务端未必错 | 冒烟用 ASCII 体或 --data-binary @file；先看原始响应再下结论 |
 
 | 23 | 1028 | 好稿保存后中文变问号——curl 参数体经 Windows argv 按代码页转码（中文→?），OK 响应掩盖了内容损坏 | #22 的 argv 变体：任何非 ASCII 体都可能经 shell→exe 边界被重编码 | 测二进制/UTF-8 体一律 --data-binary @file；生产路径 fetch 无此问题 |
+
+| 24 | 1102 | 工作台右栏 draft 全部隐形（用户外区实测）——SVG 无 width/height + pane-body flex 不拉伸子级 → 高度塌缩为 0；qc.py ROOT=parents[2] 层级错（#23 遗漏） | CSS 布局链与 SVG 生成方言契约缺口 | 修 CSS(#draft-holder 定尺寸)；Bug B 加 5s 全局轮询；qc.py ROOT 修正 |

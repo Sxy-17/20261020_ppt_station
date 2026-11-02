@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]  # station/ 的上一级=工作区根（qc.py在station/根, 比prep/浅一级, 失误#23）
 CHECKER = ROOT / "ppt-master/skills/ppt-master/scripts/svg_quality_checker.py"
 PM = ROOT / "ppt-master"
 

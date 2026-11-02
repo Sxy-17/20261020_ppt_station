@@ -150,6 +150,24 @@ window.refreshPendingCount = refreshPendingCount;
 // ---------- 批量裁决后刷新（overview.js 派发） ----------
 document.addEventListener("pages-updated", () => { buildPageSelect(); render(state.cur); });
 
+// ---------- Bug B 修复：全局轮询新稿（任何入口出稿，右栏自动亮） ----------
+let _lastDraftSig = "";
+async function pollNewDrafts() {
+  if (!state.task || !state.pages.length) return;
+  try {
+    const d = await (await fetch(`/api/task/${state.task}/pages`)).json();
+    if (!d.pages) return;
+    const sig = d.pages.map((p) => (p.has_draft ? 1 : 0) + (p.verdict ? 1 : 0)).join("");
+    if (sig !== _lastDraftSig && _lastDraftSig) {
+      state.pages = d.pages;
+      document.dispatchEvent(new Event("pages-updated"));
+      render(state.cur);
+    }
+    _lastDraftSig = sig;
+  } catch { /* 服务重启间隙静默 */ }
+}
+setInterval(pollNewDrafts, 5000);
+
 // ---------- 一键出稿（新用户零命令行） ----------
 const genBtn = document.createElement("button");
 genBtn.id = "btn-generate";
