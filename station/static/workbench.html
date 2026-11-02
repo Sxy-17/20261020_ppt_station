@@ -30,12 +30,12 @@
 </main>
 
 <footer id="bottom">
-  <!-- 裁决与意见在 R2/R3 接入；先占好位置，确认布局 -->
   <div class="verdicts">
-    <button class="vb" data-v="keep" disabled><kbd>1</kbd>保留原图</button>
-    <button class="vb" data-v="pass" disabled><kbd>2</kbd>通过</button>
-    <button class="vb" data-v="redraw" disabled><kbd>3</kbd>重绘</button>
+    <button class="vb" data-v="keep" title="导出时用原页截图（再按一次撤销）" disabled><kbd>1</kbd>保留原图</button>
+    <button class="vb" data-v="pass" title="导出时用当前新稿（再按一次撤销）" disabled><kbd>2</kbd>通过</button>
+    <button class="vb" data-v="redraw" title="交给 agent 重画（再按一次撤销）" disabled><kbd>3</kbd>重绘</button>
   </div>
+  <span id="msg"></span>
   <label id="opinion">
     <input id="op-input" placeholder="意见框（下一步接入）" disabled>
   </label>

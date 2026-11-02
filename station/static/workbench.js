@@ -42,6 +42,7 @@ async function render() {
   const p = state.pages[state.cur];
   const mySeq = ++state.seq;
   drawTop();
+  drawVerdicts();
 
   // 左：原页截图。按图片真实宽高比放大（旧课件多为 4:3，但不假设）
   const img = $("orig-img");
@@ -134,11 +135,68 @@ $("pageno").onclick = () => {
   inp.onblur = () => drawTop();
 };
 
+/* ---------- 裁决：三键 + 自动前进；对已裁决页再按同键 = 撤销（PLAN §8.4） ---------- */
+function drawVerdicts() {
+  const p = state.pages[state.cur];
+  for (const b of document.querySelectorAll(".vb")) {
+    b.classList.toggle("on", b.dataset.v === p.verdict);
+    b.disabled = !p.has_draft;   // 没稿可看就不能拍板（"沉默不确认"的另一面：没看过不确认）
+  }
+}
+
+function say(text, bad = false) {
+  $("msg").textContent = text;
+  $("msg").className = bad ? "bad" : "";
+}
+
+let writing = false;   // 写盘期间忽略连击：防止一次按键写两遍、或前进两页
+async function verdict(v) {
+  const p = state.pages[state.cur];
+  if (!p.has_draft || writing) return;
+  const undo = p.verdict === v;              // 再按同键 = 撤销
+  writing = true;
+  try {
+    const r = await fetch(api(`/page/${p.page}/verdict`), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verdict: undo ? "" : v }),
+    });
+    const d = await r.json();
+    if (!d.ok) { say(`P${p.page} 裁决没写进去：${d.error || r.status}`, true); return; }
+    p.verdict = d.verdict;                   // 以服务器落盘结果为准，不信本地猜测
+    say("");
+  } catch (err) {
+    say(`P${p.page} 裁决没写进去：服务器连不上`, true);
+    return;
+  } finally {
+    writing = false;
+  }
+  if (undo) { drawTop(); drawVerdicts(); return; }   // 撤销后留在本页，方便重新选
+  advance();
+}
+
+// 下一个未裁决页：先往后找，到末尾再从头找；未出稿的也算（去了显示"生成中"）
+function advance() {
+  for (let k = 1; k < state.pages.length; k++) {
+    const i = (state.cur + k) % state.pages.length;
+    if (!state.pages[i].verdict) { go(i); return; }
+  }
+  drawTop(); drawVerdicts();
+  say(`全部 ${state.pages.length} 页已裁决 · 在聊天里说「导出」生成 .pptx`);
+}
+
+for (const b of document.querySelectorAll(".vb")) {
+  // 点完立即 blur：焦点留在按钮上时回车会再触发一次（= 撤销）
+  b.onclick = () => { b.blur(); verdict(b.dataset.v); };
+}
+
 /* ---------- 键盘 ---------- */
 document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "INPUT") return;
+  if (e.target.tagName === "INPUT" || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "ArrowLeft") go(state.cur - 1);
   else if (e.key === "ArrowRight") go(state.cur + 1);
+  else if (e.key === "1") verdict("keep");
+  else if (e.key === "2") verdict("pass");
+  else if (e.key === "3") verdict("redraw");
 });
 
 load();

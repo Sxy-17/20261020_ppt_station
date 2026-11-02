@@ -566,11 +566,15 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--task", help="打开时直接定位到某任务")
+    ap.add_argument("--root", help="任务根目录（默认 projects/）；测试一律指向 tmp/ 下的副本，别写用户区（R1）")
     args = ap.parse_args()
+    if args.root:
+        global PROJECTS
+        PROJECTS = Path(args.root).resolve()
 
     url = f"http://127.0.0.1:{args.port}"
     if args.task:
-        url += f"/#{args.task}"
+        url += f"/t/{args.task}/p/"   # 新工作台（PLAN §8）
     if not args.no_browser:
         # 稍等服务器起来再开浏览器（daemon 场景由外层控制，这里简单延时）
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
