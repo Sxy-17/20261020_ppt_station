@@ -32,10 +32,11 @@ async function load() {
   go(i >= 0 ? i : 0, true);
 }
 
-/* ---------- 翻页 ---------- */
-function go(i, force = false) {
+/* ---------- 翻页：有未保存修改先保存，质检不过就留在本页（不静默丢弃，PLAN §8.4） ---------- */
+async function go(i, force = false) {
   if (i < 0 || i >= state.pages.length) return;
   if (i === state.cur && !force) return;
+  if (editor.dirty && !(await editor.save())) return;
   state.cur = i;
   render();
 }
@@ -44,8 +45,10 @@ function go(i, force = false) {
 async function render() {
   const p = state.pages[state.cur];
   const mySeq = ++state.seq;
+  editor.detach();          // 先放下上一页的编辑状态（调用方已保证没有未保存修改）
   drawTop();
   drawVerdicts();
+  drawChip();
   resetOpinion();
 
   // 左：原页截图。按图片真实宽高比放大（旧课件多为 4:3，但不假设）
@@ -68,13 +71,30 @@ async function render() {
     $("wait").hidden = false;
     return;
   }
-  $("svgbox").innerHTML = await r.text();
+  // 版本号取响应头：它和读到的内容严格对应（/pages 里的值可能比内容旧一拍）
+  const mtime = +(r.headers.get("X-Draft-Mtime") || p.draft_mtime);
+  const text = await r.text();
+  if (mySeq !== state.seq) return;
+  $("svgbox").innerHTML = text;
   $("wait").hidden = true;
-  state.shown[p.page] = p.draft_mtime;
+  state.shown[p.page] = mtime;
+  p.draft_mtime = mtime;
   const svg = $("svgbox").querySelector("svg");
   const vb = svg && svg.viewBox.baseVal;
   if (vb && vb.width && vb.height) state.ratio.draft = vb.width / vb.height;
   fit();
+  if (svg) editor.attach(svg, p, mtime);
+}
+
+// 右栏右上角状态签：编辑状态优先，其次说明裁决对导出意味着什么
+function drawChip(msg, cls = "") {
+  const c = $("chip"), p = state.pages[state.cur];
+  c.className = cls;
+  if (msg) { c.textContent = msg; return; }
+  if (editor.dirty) { c.className = "dirty"; c.textContent = "未保存 · Ctrl+S"; }
+  else if (p && p.verdict === "keep") c.textContent = "导出时用原图";
+  else if (p && p.verdict === "redraw") c.textContent = "已交给 agent 重绘";
+  else c.textContent = "";
 }
 
 /* ---------- 布局：两栏按各自画幅等比放到最大 ---------- */
@@ -87,6 +107,7 @@ function fit() {
     $(slide).style.width = w + "px";
     $(slide).style.height = w / ratio + "px";
   }
+  editor.syncOverlay();     // 画布尺寸变了，选中框跟着走
 }
 addEventListener("resize", fit);
 
@@ -160,7 +181,9 @@ async function verdict(v) {
   const p = state.pages[state.cur];
   if (!p.has_draft || writing) return;
   const undo = p.verdict === v;              // 再按同键 = 撤销
-  writing = true;
+  writing = true;                            // 先占住：保存可能要几秒，期间的连击一律忽略
+  // 拍板前先把手改的保存下来（过质检门）；质检不过就不裁决、不前进，问题标在画布上
+  if (!undo && editor.dirty && !(await editor.save())) { writing = false; return; }
   try {
     const r = await fetch(api(`/page/${p.page}/verdict`), {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -176,6 +199,7 @@ async function verdict(v) {
   } finally {
     writing = false;
   }
+  drawChip();
   if (undo) { drawTop(); drawVerdicts(); return; }   // 撤销后留在本页，方便重新选
   if (v === "redraw") {
     // 重绘：先让用户有机会说"怎么重画"，写不写都行，回车才去下一页
@@ -324,13 +348,15 @@ $("menu").onclick = async (e) => {
     else if (redraw.length) banner(`${redraw.length} 页标了重绘、等 agent 重画：${redraw.slice(0, 8).join("、")}`, [], 12000);
     else banner("全部已裁决 · 在聊天里说「导出」生成 .pptx", [], 12000);
   } else if (act === "keys") {
-    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 点页码输入跳页 · 意见框回车提交", [], 15000);
+    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 右栏单击选中、再按住拖动、方向键微调（Shift ×10）、Alt+单击选组内元素 · Ctrl+Z 撤销 · Ctrl+S 保存", [], 15000);
   }
 };
 
 /* ---------- 键盘 ---------- */
 document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "INPUT" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.tagName === "INPUT") return;
+  if (editor.handleKey(e)) return;          // 编辑器先接：Ctrl+Z/S、Esc、选中时的方向键
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "ArrowLeft") go(state.cur - 1);
   else if (e.key === "ArrowRight") go(state.cur + 1);
   else if (e.key === "1") verdict("keep");
@@ -338,4 +364,5 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "3") verdict("redraw");
 });
 
-load();
+// 等三个脚本（workbench / editor / stream）都执行完再加载：render 里要调 editor
+addEventListener("DOMContentLoaded", load);

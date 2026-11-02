@@ -1,6 +1,6 @@
 /* 工作台的唯一轮询（PLAN §8.5 stream.js），每 3 秒一轮，顺序固定：
-     ① 页清单：新出的稿点亮页带；当前页的稿在盘上变了才重载右栏（看 draft_mtime）
-     ② 意见队列：发现 agent 新完成的意见 → 横幅
+     ① 意见队列：发现 agent 新完成的意见 → 横幅
+     ② 页清单：新出的稿点亮页带；当前页的稿在盘上变了才重载右栏（看 draft_mtime）
      ③ 一键出稿进度（只在出稿中查）
    铁律：后台永不打断前台——不跳页；不重载当前页，除非①当前页正处于"生成中"等待态，
    或②当前页的稿真的被换了（agent 改完）。旧版每出一页就整体重载并跳回第一个未裁决页（诊断 #3）。
@@ -11,6 +11,7 @@
   const INTERVAL = 3000;
   let seenDone = null;   // 已知完成的意见 ts；null = 还没建立基线（首轮只记账不弹，避免历史 done 刷屏）
   let busy = false;      // 上一轮还没回来就不发下一轮（服务器慢时请求不堆积）
+  let conflictAsked = 0; // 已经为哪个版本弹过"载入新稿 / 保留我的修改"
 
   async function pollPages() {
     const d = await (await fetch(api("/pages"), { cache: "no-store" })).json();
@@ -32,10 +33,15 @@
     if (now.has_draft && shownMtime === undefined && $("svgbox").innerHTML === "") {
       render();                                   // 正在等的这一页出稿了
     } else if (now.has_draft && shownMtime !== undefined && now.draft_mtime !== shownMtime) {
-      // 盘上的稿比右栏显示的新（agent 改完）。
-      // R5 编辑器上线后：有未保存修改时这里改为横幅二选一「载入新稿 / 保留我的修改」，不自动载入
-      await render();
-      flash();
+      // 盘上的稿比右栏显示的新（agent 改完）
+      if (editor.dirty) {
+        // 用户手上有没保存的修改：不自动载入，问用户（同一版本只问一次）
+        if (conflictAsked !== now.draft_mtime) { conflictAsked = now.draft_mtime; editor.conflict(now.draft_mtime); }
+        drawTop(); drawVerdicts();
+      } else {
+        await render();
+        flash();
+      }
     } else {
       drawTop(); drawVerdicts();                  // 只刷新页带和裁决键（聊天里裁决的也会同步过来）
     }
@@ -80,8 +86,9 @@
     if (busy || !state.pages.length) return;
     busy = true;
     try {
-      await pollPages();
+      // 队列在前：它轻（一个小文件），打开页面时橙点/横幅能立刻出来；页清单要读每页 meta，慢一些
       await pollRequests();
+      await pollPages();
       await pollGen();
     } catch { /* 服务重启间隙静默跳过，下一轮再来 */ }
     finally { busy = false; }

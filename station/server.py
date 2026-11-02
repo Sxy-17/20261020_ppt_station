@@ -180,7 +180,42 @@ def api_draft(name: str, n: int):
     f = d / "pages" / f"{n:03d}" / "draft.svg"
     if not f.exists():
         return jsonify({"error": "尚未出稿"}), 404
-    return send_file(f, mimetype="image/svg+xml")
+    resp = send_file(f, mimetype="image/svg+xml", max_age=0)
+    # 编辑器拿这个当保存时的基准版本（与读到的内容严格对应；/pages 里的值可能已过时）
+    resp.headers["X-Draft-Mtime"] = str(draft_store.mtime_of(f))
+    resp.headers["Access-Control-Expose-Headers"] = "X-Draft-Mtime"
+    return resp
+
+
+@app.route("/api/task/<name>/page/<int:n>/draft-wip", methods=["GET", "PUT", "DELETE"])
+def api_draft_wip(name: str, n: int):
+    """未保存编辑的防丢副本（PLAN §8.4，决策 C"未保存编辑永远先落盘"）。
+    存 pages/NNN/draft.wip.json = {base_mtime, svg}：不过质检，导出器和 agent 都不读它。
+    浏览器崩了/误关标签页，重开这一页时提示恢复。"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    pdir = d / "pages" / f"{n:03d}"
+    if not pdir.is_dir():
+        return jsonify({"error": "页面不存在"}), 404
+    f = pdir / "draft.wip.json"
+    if request.method == "GET":
+        if not f.exists():
+            return jsonify({"error": "没有未保存的修改"}), 404
+        return send_file(f, mimetype="application/json", max_age=0)
+    if request.method == "DELETE":
+        f.unlink(missing_ok=True)
+        return jsonify({"ok": True})
+    body = request.get_json(force=True)
+    svg = body.get("svg", "")
+    if not isinstance(svg, str) or not svg.lstrip().startswith("<") or len(svg) > 2_000_000:
+        return jsonify({"error": "内容不像 SVG 或超过 2MB"}), 400
+    tmp = pdir / "draft.wip.json.tmp"
+    tmp.write_text(json.dumps({"base_mtime": int(body.get("base_mtime") or 0), "svg": svg,
+                               "ts": datetime.now().isoformat(timespec="seconds")},
+                              ensure_ascii=False), encoding="utf-8")
+    tmp.replace(f)
+    return jsonify({"ok": True})
 
 
 @app.post("/api/task/<name>/page/<int:n>/verdict")
@@ -282,7 +317,7 @@ def api_new_task():
     """创建任务（M6.1）：A=翻新（intake 后自然产生），B=从零（此处建壳）"""
     body = request.get_json(force=True)
     name = body.get("name", "")
-    if not name or any(c in name for c in "/\.. "):
+    if not name or any(c in name for c in "/\\. "):   # 拒绝 / \ . 空格（原写法 "\." 是无效转义，诊断 #12）
         return jsonify({"error": "任务名非法（字母数字-_）"}), 400
     kind = body.get("kind", "b")
     d = PROJECTS / name

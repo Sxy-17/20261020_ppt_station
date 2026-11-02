@@ -56,6 +56,17 @@ input { font: inherit; color: inherit; }
 /* 尺寸由 JS 按画幅算死（fit），SVG 只需撑满——避开 #24 的高度塌缩 */
 #svgbox, #svgbox svg { width: 100%; height: 100%; display: block; }
 #svgbox svg { user-select: none; }
+/* ---------- 编辑（R5） ---------- */
+#chip { position: absolute; top: 8px; right: 12px; z-index: 3; font-size: 12px; color: var(--dim); max-width: 70%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chip.dirty { color: var(--accent); }
+#chip.bad { color: var(--bad); }
+#svgbox svg :is(g, text, rect, path, line, image, ellipse, circle, polygon, polyline) { cursor: default; }
+#svgbox.has-sel svg .ed-sel, #svgbox.has-sel svg .ed-sel * { cursor: move; }
+#selbox { position: absolute; pointer-events: none; border: 1.5px solid var(--accent); z-index: 4; }
+.qcbad { position: absolute; pointer-events: none; border: 1.5px dashed var(--bad);
+  background: rgba(208, 103, 91, .08); z-index: 4; }
+
 #wait { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); background: var(--surface); }
 #wait i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
   margin-right: 8px; animation: pulse 1.2s ease-in-out infinite; vertical-align: 1px; }

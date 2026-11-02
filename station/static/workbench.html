@@ -29,8 +29,12 @@
   </section>
   <section class="pane" id="draft-pane">
     <span class="label">新稿</span>
+    <!-- 状态签：未保存 / 已保存 / 质检未过 / 裁决含义——每页只有这一个位置说话 -->
+    <span id="chip"></span>
     <div class="slide" id="draft-slide">
       <div id="svgbox"></div>
+      <!-- 编辑覆盖层放在 svgbox 外面：换页只换 svgbox，覆盖层不会被清掉（旧版的坑，诊断 #2） -->
+      <div id="selbox" hidden></div>
       <div id="wait" hidden></div>
     </div>
   </section>
@@ -52,6 +56,7 @@
 <div id="banner" hidden></div>
 
 <script src="/static/workbench.js"></script>
+<script src="/static/editor.js"></script>
 <script src="/static/stream.js"></script>
 </body>
 </html>
