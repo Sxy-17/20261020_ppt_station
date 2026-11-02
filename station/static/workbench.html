@@ -37,10 +37,14 @@
   </div>
   <span id="msg"></span>
   <label id="opinion">
-    <input id="op-input" placeholder="意见框（下一步接入）" disabled>
+    <input id="op-input" maxlength="500">
+    <span id="op-state"></span>
   </label>
 </footer>
 
+<div id="banner" hidden></div>
+
 <script src="/static/workbench.js"></script>
+<script src="/static/stream.js"></script>
 </body>
 </html>

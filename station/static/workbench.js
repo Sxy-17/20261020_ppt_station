@@ -12,6 +12,7 @@ const state = {
   pages: [],      // GET /pages 的页清单
   cur: 0,         // 当前页在 pages 里的下标
   seq: 0,         // 渲染序号：只有最新一次 render 的响应能写进右栏（防翻页竞态，诊断 #4）
+  requests: [],   // 意见队列（pending_requests.jsonl），stream.js 定时刷新
   ratio: { orig: 4 / 3, draft: 16 / 9 },   // 两栏画幅，加载后按真实尺寸更新
 };
 
@@ -43,6 +44,7 @@ async function render() {
   const mySeq = ++state.seq;
   drawTop();
   drawVerdicts();
+  resetOpinion();
 
   // 左：原页截图。按图片真实宽高比放大（旧课件多为 4:3，但不假设）
   const img = $("orig-img");
@@ -98,10 +100,11 @@ function drawTop() {
   }
   state.pages.forEach((q, i) => {
     const c = strip.children[i];
+    const n = pendingOf(q.page);
     c.className = "cell" + (!q.has_draft ? " wait" : q.verdict ? " " + q.verdict : "") +
-      (i === state.cur ? " cur" : "");
+      (i === state.cur ? " cur" : "") + (n ? " pending" : "");
     const st = !q.has_draft ? "生成中" : VERDICT_LABEL[q.verdict] || "待审";
-    c.title = `P${q.page}${q.title ? " · " + q.title : ""} · ${st}`;
+    c.title = `P${q.page}${q.title ? " · " + q.title : ""} · ${st}${n ? ` · 意见处理中 ${n}` : ""}`;
   });
 
   const done = state.pages.filter((q) => q.verdict).length;
@@ -171,6 +174,15 @@ async function verdict(v) {
     writing = false;
   }
   if (undo) { drawTop(); drawVerdicts(); return; }   // 撤销后留在本页，方便重新选
+  if (v === "redraw") {
+    // 重绘：先让用户有机会说"怎么重画"，写不写都行，回车才去下一页
+    drawTop(); drawVerdicts();
+    const inp = $("op-input");
+    inp.placeholder = "重绘要求（可留空），回车去下一页 · Esc 留在本页";
+    inp.dataset.thenNext = "1";
+    inp.focus();
+    return;
+  }
   advance();
 }
 
@@ -187,6 +199,95 @@ function advance() {
 for (const b of document.querySelectorAll(".vb")) {
   // 点完立即 blur：焦点留在按钮上时回车会再触发一次（= 撤销）
   b.onclick = () => { b.blur(); verdict(b.dataset.v); };
+}
+
+/* ---------- 意见框（PLAN §8.4）：永远对应当前页，回车提交，提交后不等待 ---------- */
+const OP_PLACEHOLDER = "意见：大白话告诉 agent 这页怎么改，回车提交";
+
+// "处理中" = 排队(queued) 或 agent 已领走正在改(working)
+function pendingOf(page) {
+  return state.requests.filter((r) => r.page === page && (r.status === "queued" || r.status === "working")).length;
+}
+
+function resetOpinion() {
+  const inp = $("op-input");
+  inp.placeholder = OP_PLACEHOLDER;
+  delete inp.dataset.thenNext;
+  // 换页时如果光标还停在空的意见框里（比如按 3 后直接点了页带），交还给页面：
+  // 否则接下来按 1/2/3 会变成往框里打字。框里有字就不动，免得用户写到一半被打断
+  if (document.activeElement === inp && !inp.value) inp.blur();
+  drawOpinion();
+}
+
+function drawOpinion() {
+  const p = state.pages[state.cur];
+  if (!p) return;
+  const n = pendingOf(p.page);
+  $("op-state").className = n ? "busy" : "";
+  $("op-state").textContent = n ? `已交给 agent · 处理中 ${n} 条` : "";
+}
+
+let sending = false;
+$("op-input").addEventListener("keydown", async (e) => {
+  e.stopPropagation();               // 打字时数字键/方向键不触发裁决和翻页
+  const inp = e.target;
+  if (e.key === "Escape") { delete inp.dataset.thenNext; inp.placeholder = OP_PLACEHOLDER; inp.blur(); return; }
+  if (e.key !== "Enter" || e.isComposing || sending) return;   // 输入法选词时的回车不算提交
+  const text = inp.value.trim();
+  const p = state.pages[state.cur];
+  if (text) {
+    sending = true;
+    try {
+      const r = await fetch(api(`/page/${p.page}/request`), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const d = await r.json();
+      if (!d.ok) { say(`意见没提交上：${d.error || r.status}`, true); return; }
+      state.requests.push(d);        // 立刻反映到页带橙点，不等下一次轮询
+      inp.value = "";
+      say("");
+    } catch {
+      say("意见没提交上：服务器连不上", true);
+      return;
+    } finally {
+      sending = false;
+    }
+  }
+  drawTop(); drawOpinion();
+  if (inp.dataset.thenNext) { delete inp.dataset.thenNext; inp.blur(); advance(); }
+});
+
+/* ---------- 横幅：非弹窗，自动消失；同一时刻只留最新一条 ---------- */
+let bannerTimer = null;
+function banner(text, actions = [], ttl = 8000) {
+  const b = $("banner");
+  b.innerHTML = "";
+  const t = document.createElement("span");
+  t.className = "t";
+  t.textContent = text;              // textContent：意见是用户原话，不当 HTML 解析
+  b.appendChild(t);
+  for (const [label, fn] of actions) {
+    const btn = document.createElement("button");
+    btn.textContent = label;
+    btn.onclick = () => { b.hidden = true; fn(); };
+    b.appendChild(btn);
+  }
+  const x = document.createElement("button");
+  x.className = "ghost";
+  x.textContent = "×";
+  x.onclick = () => { b.hidden = true; };
+  b.appendChild(x);
+  b.hidden = false;
+  clearTimeout(bannerTimer);
+  if (ttl) bannerTimer = setTimeout(() => { b.hidden = true; }, ttl);
+}
+
+function flash() {
+  const s = $("draft-slide");
+  s.classList.remove("flash");
+  void s.offsetWidth;                // 强制重排，让动画能重复触发
+  s.classList.add("flash");
 }
 
 /* ---------- 键盘 ---------- */
