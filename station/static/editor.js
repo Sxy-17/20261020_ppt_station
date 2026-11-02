@@ -78,6 +78,96 @@ const editor = (() => {
   let followers = [];
   const moving = () => (selected ? [selected, ...followers] : []);
 
+  /* ---------- 细线好点中（R7）：鼠标落在背景上时，在附近几像素内找线 ---------- */
+  // 箭头、连线常只有 1~2px，要点得很准；这里给线临时加粗做命中测试（不改稿件），找最上面那条
+  const NEAR_PX = 6;
+  function nearStroke(cx, cy) {
+    const cands = [...svg.querySelectorAll("line, polyline, path")].filter((el) => !el.closest("defs"));
+    for (let i = cands.length - 1; i >= 0; i--) {
+      const el = cands[i], m = el.getScreenCTM();
+      if (!m || !m.a) continue;
+      const p = new DOMPoint(cx, cy).matrixTransform(m.inverse());
+      const sw = parseFloat(getComputedStyle(el).strokeWidth) || 1;
+      // 容差换算到元素自己的坐标单位：m.a = 元素坐标 1 单位在屏幕上占几像素（缩放后也对）
+      el.style.strokeWidth = sw + (2 * NEAR_PX) / m.a + "px";
+      const hit = el.isPointInStroke(p);
+      el.style.strokeWidth = "";
+      if (hit) return el;
+    }
+    return null;
+  }
+
+  /* ---------- 线 / 箭头的点（R7）：端点 + 曲线弯度控制点 ---------- */
+  // path 只认稿里实际出现的绝对坐标命令 M L C Q（生成器只写这几种）；遇到别的命令不出手柄，只能整体挪
+  function pointsOf(el) {
+    const t = el.tagName;
+    if (t === "line") return [
+      { x: +el.getAttribute("x1"), y: +el.getAttribute("y1"), kind: "end" },
+      { x: +el.getAttribute("x2"), y: +el.getAttribute("y2"), kind: "end" }];
+    if (t === "polyline") {
+      const n = (el.getAttribute("points") || "").trim().split(/[\s,]+/).map(Number);
+      const pts = [];
+      for (let i = 0; i + 1 < n.length; i += 2) pts.push({ x: n[i], y: n[i + 1], kind: "end" });
+      return pts;
+    }
+    if (t === "path") {
+      const d = el.getAttribute("d") || "";
+      if (!/^[\sMLCQ0-9.,eE+-]+$/.test(d)) return [];
+      const segs = [...d.matchAll(/([MLCQ])([^MLCQ]*)/g)];
+      const pts = [];
+      for (const [, cmd, args] of segs) {
+        const n = args.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+        for (let i = 0; i + 1 < n.length; i += 2) {
+          const last = i + 2 >= n.length;
+          // C/Q 的最后一对是落点，前面的是弯度控制点
+          pts.push({ x: n[i], y: n[i + 1], kind: (cmd === "C" || cmd === "Q") && !last ? "ctrl" : "end", cmd, first: i === 0 });
+        }
+      }
+      return pts;
+    }
+    return [];
+  }
+  function setPoints(el, pts) {
+    const r = (v) => round(v);
+    const t = el.tagName;
+    if (t === "line") {
+      el.setAttribute("x1", r(pts[0].x)); el.setAttribute("y1", r(pts[0].y));
+      el.setAttribute("x2", r(pts[1].x)); el.setAttribute("y2", r(pts[1].y));
+    } else if (t === "polyline") {
+      el.setAttribute("points", pts.map((p) => `${r(p.x)},${r(p.y)}`).join(" "));
+    } else if (t === "path") {
+      let d = "";
+      for (const p of pts) d += (p.first ? (d ? " " : "") + p.cmd : "") + ` ${r(p.x)} ${r(p.y)}`;
+      el.setAttribute("d", d.trim().replace(/([MLCQ]) /g, "$1"));
+    }
+  }
+
+  /* ---------- 箭头头部跟着线变色（R7） ---------- */
+  // 头部是 <defs> 里单独定义的 marker，颜色写死。改线色时为新颜色复制一份 marker 换上，
+  // 结构照抄原 marker（引擎的 marker 三角契约不变），只改颜色
+  function markerFor(id, color) {
+    const base = svg.getElementById(id);
+    if (!base) return id;
+    const rootId = id.replace(/-c[0-9A-F]{6}$/, "");
+    const nid = `${rootId}-c${color.slice(1)}`;
+    if (!svg.getElementById(nid)) {
+      const m = (svg.getElementById(rootId) || base).cloneNode(true);
+      m.id = nid;
+      for (const s of m.querySelectorAll("*")) {
+        if (s.getAttribute("fill") && s.getAttribute("fill") !== "none") s.setAttribute("fill", color);
+        if (s.getAttribute("stroke") && s.getAttribute("stroke") !== "none") s.setAttribute("stroke", color);
+      }
+      base.parentNode.appendChild(m);
+    }
+    return nid;
+  }
+  function recolorMarkers(el, color) {
+    for (const a of ["marker-start", "marker-end", "marker-mid"]) {
+      const v = el.getAttribute(a), m = v && /url\(#([^)]+)\)/.exec(v);
+      if (m) el.setAttribute(a, `url(#${markerFor(m[1], color)})`);
+    }
+  }
+
   // 选中关系在撤销后要能找回来：记"从 <svg> 往下的子节点序号路径"（叶子对象大多没有 id）
   function pathOf(el) { const p = []; while (el && el !== svg) { p.unshift([...el.parentNode.children].indexOf(el)); el = el.parentNode; } return p; }
   function byPath(p) { let el = svg; for (const i of p) { el = el && el.children[i]; } return el && el !== svg ? el : null; }
@@ -114,8 +204,197 @@ const editor = (() => {
     $("svgbox").classList.remove("has-sel");
     $("selbox").hidden = true;
     $("props").hidden = true;
-    document.querySelectorAll(".selfollow").forEach((n) => n.remove());
+    document.querySelectorAll(".selfollow, .hdl").forEach((n) => n.remove());
   }
+
+  /* ---------- 手柄（R7）：缩放 / 端点 / 弯度 ---------- */
+  const RESIZABLE = ["rect", "image", "ellipse", "circle", "text"];
+  let handleDrag = false;    // 拖手柄期间不重画手柄以外的东西（属性条让开）
+  function drawHandles(host) {
+    document.querySelectorAll(".hdl").forEach((n) => n.remove());
+    if (!selected || drag && drag.moved) return;
+    const el = selected, pts = pointsOf(el);
+    const mk = (kind, x, y, idx) => {
+      const h = document.createElement("div");
+      h.className = `hdl ${kind}`;
+      h.style.left = x + "px"; h.style.top = y + "px";
+      h.title = kind === "size" ? "拖动缩放（Shift 等比）" : kind === "ctrl" ? "拖动调弯度" : "拖动改端点（Shift 水平/垂直）";
+      h.addEventListener("pointerdown", (e) => startHandle(e, kind, idx));
+      $("draft-slide").appendChild(h);
+    };
+    if (pts.length) {
+      const m = el.getScreenCTM();
+      pts.forEach((p, i) => { const s = new DOMPoint(p.x, p.y).matrixTransform(m); mk(p.kind, s.x - host.left, s.y - host.top, i); });
+    } else if (RESIZABLE.includes(el.tagName)) {
+      const r = el.getBoundingClientRect();
+      mk("size", r.right - host.left + 3, r.bottom - host.top + 3);
+    }
+  }
+  const toLocal = (el, cx, cy) => new DOMPoint(cx, cy).matrixTransform(el.getScreenCTM().inverse());
+  const num = (el, a) => parseFloat(el.getAttribute(a)) || 0;
+
+  function startHandle(e, kind, idx) {
+    e.preventDefault(); e.stopPropagation();
+    const el = selected;
+    if (!el) return;
+    snapshot();
+    handleDrag = true;
+    $("props").hidden = true;
+    const p0 = toLocal(el, e.clientX, e.clientY);
+    // 起点状态：之后每一步都从起点算，不累积误差
+    const pts0 = pointsOf(el);
+    const a0 = { w: num(el, "width"), h: num(el, "height"), rx: num(el, "rx"), ry: num(el, "ry"), r: num(el, "r"),
+                 cx: num(el, "cx"), cy: num(el, "cy") };
+    const fs0 = el.tagName === "text"
+      ? [el, ...el.querySelectorAll("tspan[font-size]")].map((t) => [t, fontSizeOf(t)]) : [];
+    const bw0 = el.tagName === "text" ? Math.max(1, el.getBBox().width) : 1;
+
+    const onMove = (ev) => {
+      const p = toLocal(el, ev.clientX, ev.clientY), dx = p.x - p0.x, dy = p.y - p0.y;
+      const t = el.tagName;
+      if (kind !== "size") {
+        const pts = pts0.map((q) => ({ ...q }));
+        let nx = pts0[idx].x + dx, ny = pts0[idx].y + dy;
+        if (ev.shiftKey && kind === "end" && pts.length >= 2) {
+          // 以相邻点为基准拉成水平或垂直
+          const o = pts0[idx === 0 ? 1 : idx - 1];
+          if (Math.abs(nx - o.x) > Math.abs(ny - o.y)) ny = o.y; else nx = o.x;
+        }
+        pts[idx].x = nx; pts[idx].y = ny;
+        setPoints(el, pts);
+      } else if (t === "rect" || t === "image") {
+        let w = Math.max(4, a0.w + dx), h = Math.max(4, a0.h + dy);
+        if (t === "image" || ev.shiftKey) { const k = Math.max(w / a0.w, h / a0.h); w = a0.w * k; h = a0.h * k; }   // 图片默认等比，免得拉变形
+        el.setAttribute("width", round(w)); el.setAttribute("height", round(h));
+      } else if (t === "ellipse") {
+        let rx = Math.max(2, a0.rx + dx / 2), ry = Math.max(2, a0.ry + dy / 2);
+        if (ev.shiftKey) { const k = Math.max(rx / a0.rx, ry / a0.ry); rx = a0.rx * k; ry = a0.ry * k; }
+        // 左上角不动：半径变了，圆心跟着挪
+        el.setAttribute("rx", round(rx)); el.setAttribute("ry", round(ry));
+        el.setAttribute("cx", round(a0.cx + rx - a0.rx)); el.setAttribute("cy", round(a0.cy + ry - a0.ry));
+      } else if (t === "circle") {
+        const r = Math.max(2, a0.r + Math.max(dx, dy) / 2);
+        el.setAttribute("r", round(r));
+        el.setAttribute("cx", round(a0.cx + r - a0.r)); el.setAttribute("cy", round(a0.cy + r - a0.r));
+      } else if (t === "text") {
+        // 文字框缩放 = 按横向拉伸比例改字号（自带字号的强调片段同比例）
+        const k = Math.max(0.3, (bw0 + dx) / bw0);
+        for (const [n, f] of fs0) n.setAttribute("font-size", Math.max(6, Math.round(f * k)));
+      }
+      syncOverlay();
+    };
+    const onUp = () => {
+      removeEventListener("pointermove", onMove);
+      removeEventListener("pointerup", onUp);
+      handleDrag = false;
+      touch(el);
+      changed();
+      buildProps(); syncOverlay();
+    };
+    // 监听挂在 window 上：手柄每一步都会重画，挂在手柄自己身上会丢事件
+    addEventListener("pointermove", onMove);
+    addEventListener("pointerup", onUp);
+  }
+
+  /* ---------- 新建：文本 / 矩形 / 图片（R7） ---------- */
+  // 落点 = 右栏当前看得见的那块画布的中心（放大后也是看着的地方）
+  function dropPoint() {
+    const sc = $("draft-scroll").getBoundingClientRect(), sl = $("draft-slide").getBoundingClientRect();
+    const cx = (Math.max(sc.left, sl.left) + Math.min(sc.right, sl.right)) / 2;
+    const cy = (Math.max(sc.top, sl.top) + Math.min(sc.bottom, sl.bottom)) / 2;
+    return new DOMPoint(cx, cy).matrixTransform(svg.getScreenCTM().inverse());
+  }
+  // 落点在哪个语义组的格子里就归进哪个组（取最小的）；都不在就自立新组
+  function hostAt(p) {
+    let best = null, area = Infinity;
+    for (const g of svg.children) {
+      const b = g.getAttribute && g.getAttribute("data-pptx-bounds");
+      if (!b || isBackground(g)) continue;
+      const [x, y, w, h] = b.trim().split(/[\s,]+/).map(Number);
+      if (p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h && w * h < area) { best = g; area = w * h; }
+    }
+    return best;
+  }
+  // 新建的东西默认用本页已有的颜色，不突兀。
+  // pick="dark"：取本页用过的最深的颜色——正文色几乎总是最深的；按"出现最多"会选到编号/日期的点缀色（P3 实测）
+  // pick="common"：取出现最多的（线色、框色这类没有"正文"概念的）
+  function pageColor(sel, attr, fallback, pick) {
+    const n = new Map();
+    for (const el of svg.querySelectorAll(sel)) {
+      if (el.closest("defs")) continue;
+      const m = /rgb\((\d+), (\d+), (\d+)\)/.exec((getComputedStyle(el)[attr] || "").trim());
+      if (!m) continue;
+      const hex = "#" + m.slice(1, 4).map((v) => (+v).toString(16).padStart(2, "0")).join("").toUpperCase();
+      if (hex !== "#FFFFFF") n.set(hex, (n.get(hex) || 0) + 1);
+    }
+    const all = [...n.entries()];
+    if (!all.length) return fallback;
+    const lum = (h) => { const v = parseInt(h.slice(1), 16); return 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255); };
+    all.sort(pick === "dark" ? (a, b) => lum(a[0]) - lum(b[0]) : (a, b) => b[1] - a[1]);
+    return all[0][0];
+  }
+  const NS = "http://www.w3.org/2000/svg";
+  function make(tag, attrs) { const el = document.createElementNS(NS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; }
+  function insert(el) {
+    snapshot();
+    const host = hostAt(dropPoint());
+    if (host) {
+      host.appendChild(el);
+      touch(host);
+    } else {
+      const g = make("g", { id: `user-${Date.now().toString(36)}` });
+      g.appendChild(el);
+      svg.appendChild(g);
+      const [x, y, w, h] = canvasBox(el);
+      g.setAttribute("data-pptx-bounds", [x - 4, y - 4, w + 8, h + 8].map(round).join(" "));
+      g.dataset.edGrow = "1";
+    }
+    changed();
+    select(el);
+  }
+  $("add").addEventListener("click", (e) => { e.stopPropagation(); $("addmenu").hidden = !$("addmenu").hidden; });
+  document.addEventListener("click", (e) => { if (!$("addmenu").contains(e.target) && e.target !== $("add")) $("addmenu").hidden = true; });
+  $("addmenu").addEventListener("click", (e) => {
+    const k = e.target.dataset && e.target.dataset.new;
+    if (!k || !svg) return;
+    $("addmenu").hidden = true;
+    const p = dropPoint();
+    if (k === "text") {
+      const t = make("text", { x: round(p.x - 40), y: round(p.y + 8), "font-size": 22,
+        fill: pageColor("text", "fill", "#1D2430", "dark") });
+      t.textContent = "新文本";
+      insert(t);
+      openTextEdit(t.firstChild);                 // 新建文字直接进入改字
+    } else if (k === "rect") {
+      // 默认只描边不填充：新框画在最上层，填白会把底下的字盖住
+      insert(make("rect", { x: round(p.x - 120), y: round(p.y - 60), width: 240, height: 120, rx: 8,
+        fill: "none", stroke: pageColor("rect, line, path", "stroke", "#1F4E79", "common"), "stroke-width": 1.8 }));
+    } else if (k === "image") {
+      $("file").click();
+    }
+  });
+  $("file").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f || !svg) return;
+    const fd = new FormData();
+    fd.append("file", f);
+    let d;
+    try { d = await (await fetch(api("/asset"), { method: "POST", body: fd })).json(); }
+    catch { say("图片没传上：服务器连不上", true); return; }
+    if (!d.ok) { say(`图片没传上：${d.error}`, true); return; }
+    // 稿里写 ../images/<名>：与导出搬运规则一致（export.py 从 <任务>/images/ 取）
+    const href = `../images/${d.name}`;
+    const im = new Image();
+    im.onload = () => {
+      const p = dropPoint();
+      const w = Math.min(360, im.naturalWidth || 360), h = w * (im.naturalHeight || 1) / (im.naturalWidth || 1);
+      insert(make("image", { href, x: round(p.x - w / 2), y: round(p.y - h / 2), width: round(w), height: round(h),
+        preserveAspectRatio: "xMidYMid meet" }));
+    };
+    im.onerror = () => say("图片传上了但读不出来", true);
+    im.src = new URL(href, location.href).href;
+  });
   function syncOverlay() {
     if (!selected || !selected.isConnected) return;
     const host = $("draft-slide").getBoundingClientRect(), r = selected.getBoundingClientRect();
@@ -130,6 +409,7 @@ const editor = (() => {
         width: fr.width + 2 + "px", height: fr.height + 2 + "px" });
       $("draft-slide").appendChild(d);
     }
+    drawHandles(host);
     // 属性条放在选中框上方，不盖住任何内容：画布内上方放不下（比如选了贴顶的标题）
     // 就借用画布上沿外面的留白；留白也不够才放到下方。水平方向不出画布
     const pr = $("props");
@@ -217,7 +497,11 @@ const editor = (() => {
     const ts = textsIn(selected);
     snapshot("color:" + pathOf(selected).join("."));
     if (ts.length) ts.forEach((t) => t.setAttribute("fill", c));
-    else shapesIn(selected).forEach((s) => s.setAttribute(paintAttr(s), c));
+    else shapesIn(selected).forEach((s) => {
+      const a = paintAttr(s);
+      s.setAttribute(a, c);
+      if (a === "stroke") recolorMarkers(s, c);       // 箭头头部跟着变
+    });
     touch(selected); changed();
   }
 
@@ -358,7 +642,10 @@ const editor = (() => {
   let drag = null;
   $("svgbox").addEventListener("pointerdown", (e) => {
     if (!svg || e.button !== 0) return;
-    const u = unitOf(e.target, e.altKey);
+    $("addmenu").hidden = true;
+    let u = unitOf(e.target, e.altKey);
+    // 点在背景/空白上：看看附近有没有细线（箭头、连线）
+    if (!u || isBackground(e.target)) { const near = nearStroke(e.clientX, e.clientY); if (near) u = e.altKey ? rootOf(near) : near; }
     if (!u) { deselect(); return; }
     e.preventDefault();                         // 防止浏览器原生拖图片/选文字
     if (u !== selected) { select(u); return; }
@@ -391,6 +678,7 @@ const editor = (() => {
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && k.toLowerCase() === "z") { e.preventDefault(); doUndo(); return true; }
     if (ctrl && k.toLowerCase() === "s") { e.preventDefault(); ed.save(); return true; }
+    if (k === "Escape" && !$("addmenu").hidden) { $("addmenu").hidden = true; return true; }
     if (k === "Escape" && selected) { deselect(); return true; }
     if ((k === "Delete" || k === "Backspace") && selected) { e.preventDefault(); removeSelected(); return true; }
     if (k.startsWith("Arrow") && selected && !ctrl) {

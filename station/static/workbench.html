@@ -23,23 +23,36 @@
 </div>
 
 <main id="main">
+  <!-- 每栏 = 固定外框（标签/状态签/按钮不随内容滚动）+ 可滚动内层（Ctrl+滚轮放大后可平移） -->
   <section class="pane" id="orig-pane">
-    <span class="label">原页</span>
-    <div class="slide" id="orig-slide"><img id="orig-img" alt="原页"></div>
+    <span class="label" id="orig-label">原页</span>
+    <div class="scroller" id="orig-scroll">
+      <div class="slide" id="orig-slide"><img id="orig-img" alt="原页" draggable="false"></div>
+    </div>
   </section>
   <div id="split" title="拖动调整左右宽度 · 双击恢复一半一半"></div>
   <section class="pane" id="draft-pane">
-    <span class="label">新稿</span>
+    <span class="label" id="draft-label">新稿</span>
     <!-- 状态签：未保存 / 已保存 / 质检未过 / 裁决含义——每页只有这一个位置说话 -->
     <span id="chip"></span>
-    <div class="slide" id="draft-slide">
-      <div id="svgbox"></div>
-      <!-- 编辑覆盖层放在 svgbox 外面：换页只换 svgbox，覆盖层不会被清掉（旧版的坑，诊断 #2） -->
-      <div id="selbox" hidden></div>
-      <!-- 浮动属性条：贴着选中元素出现，只放这个元素用得上的控件 -->
-      <div id="props" hidden></div>
-      <div id="wait" hidden></div>
+    <div class="scroller" id="draft-scroll">
+      <div class="slide" id="draft-slide">
+        <div id="svgbox"></div>
+        <!-- 编辑覆盖层放在 svgbox 外面：换页只换 svgbox，覆盖层不会被清掉（旧版的坑，诊断 #2） -->
+        <div id="selbox" hidden></div>
+        <!-- 浮动属性条：贴着选中元素出现，只放这个元素用得上的控件 -->
+        <div id="props" hidden></div>
+        <div id="wait" hidden></div>
+      </div>
     </div>
+    <!-- 新建：文本 / 矩形 / 图片（R7） -->
+    <button id="add" title="新建元素" hidden>+</button>
+    <div id="addmenu" hidden>
+      <button data-new="text">文本</button>
+      <button data-new="rect">矩形</button>
+      <button data-new="image">图片…</button>
+    </div>
+    <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
   </section>
 </main>
 

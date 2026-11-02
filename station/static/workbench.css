@@ -53,15 +53,28 @@ input { font: inherit; color: inherit; }
   transform: translate(-50%, -50%); border-radius: 2px; background: var(--line); transition: background .12s; }
 #split:hover::after, #split.on::after { background: var(--dim); }
 body.resizing, body.resizing * { cursor: col-resize !important; user-select: none; }
-.pane { position: relative; min-height: 0; display: grid; place-items: center; background: var(--surface); border-radius: 6px; }
-.label { position: absolute; top: 8px; left: 12px; color: var(--faint); font-size: 12px; z-index: 2; pointer-events: none; }
-.slide { position: relative; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.pane { position: relative; min-height: 0; background: var(--surface); border-radius: 6px; overflow: hidden; }
+.label { position: absolute; top: 8px; left: 12px; color: var(--faint); font-size: 12px; z-index: 8; pointer-events: none; }
+.label .z { color: var(--accent); margin-left: 6px; }
+/* 可滚动内层：用 flex + margin:auto 居中——放大后超出的部分两边都能滚到
+   （grid 的 place-items:center 会把左/上超出的部分裁掉，滚不过去） */
+.scroller { position: absolute; inset: 0; overflow: auto; display: flex; }
+.slide { position: relative; flex: none; margin: auto; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 #orig-slide { background: #fff; }
 #orig-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 #draft-slide { background: #fff; }
 /* 尺寸由 JS 按画幅算死（fit），SVG 只需撑满——避开 #24 的高度塌缩 */
 #svgbox, #svgbox svg { width: 100%; height: 100%; display: block; }
 #svgbox svg { user-select: none; }
+
+/* 新建按钮与菜单（R7）：放在外框上，不随稿件滚动 */
+#add { position: absolute; right: 12px; bottom: 10px; z-index: 8; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--surface-2); color: var(--dim); font-size: 18px; line-height: 30px; }
+#add:hover { color: var(--text); background: var(--line); }
+#addmenu { position: absolute; right: 12px; bottom: 46px; z-index: 9; padding: 4px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+#addmenu button { display: block; width: 100%; padding: 6px 16px; text-align: left; border-radius: 4px; }
+#addmenu button:hover { background: var(--line); }
 /* ---------- 编辑（R5） ---------- */
 #chip { position: absolute; top: 8px; right: 12px; z-index: 3; font-size: 12px; color: var(--dim); max-width: 70%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -70,6 +83,13 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 #svgbox svg :is(g, text, rect, path, line, image, ellipse, circle, polygon, polyline) { cursor: default; }
 #svgbox.has-sel svg .ed-sel, #svgbox.has-sel svg .ed-sel * { cursor: move; }
 #selbox { position: absolute; pointer-events: none; border: 1.5px solid var(--accent); z-index: 4; }
+/* 手柄（R7）：右下角方块 = 缩放；圆点 = 线/箭头的端点；小方块 = 曲线弯度控制点 */
+.hdl { position: absolute; z-index: 5; width: 11px; height: 11px; margin: -6px 0 0 -6px;
+  background: #fff; border: 1.5px solid var(--accent); touch-action: none; }
+.hdl.size { border-radius: 2px; background: var(--accent); cursor: nwse-resize; }
+.hdl.end { border-radius: 50%; cursor: move; }
+.hdl.ctrl { width: 9px; height: 9px; margin: -5px 0 0 -5px; border-radius: 1px; border-style: dashed; cursor: move; }
+.hdl:hover { background: var(--accent); }
 /* 选中框时"框里会跟着走"的对象 */
 .selfollow { position: absolute; pointer-events: none; border: 1px dashed var(--accent); opacity: .7; z-index: 4; }
 .qcbad { position: absolute; pointer-events: none; border: 1.5px dashed var(--bad);

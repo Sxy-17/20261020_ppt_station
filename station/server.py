@@ -564,9 +564,15 @@ def api_asset(name: str):
     ext = (f.filename or "png").rsplit(".", 1)[-1].lower()
     if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
         return jsonify({"error": f"不支持的类型 {ext}"}), 400
-    fname = f"upload_{datetime.now().strftime('%H%M%S')}_{f.filename.replace(' ', '_')}"
+    data = f.read()
+    if len(data) > 20 * 1024 * 1024:
+        return jsonify({"error": "图片超过 20MB"}), 400
+    # 文件名完全由服务器生成（纯 ASCII + 随机串）：旧版把用户文件名原样拼进路径——
+    # 可被 ../ 穿越，中文名在导出链路（R6 路径一律 ASCII）也会出问题（诊断 #12）
+    import uuid
+    fname = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.{ext}"
     (d / "images").mkdir(exist_ok=True)
-    (d / "images" / fname).write_bytes(f.read())
+    (d / "images" / fname).write_bytes(data)
     return jsonify({"ok": True, "name": fname})
 
 

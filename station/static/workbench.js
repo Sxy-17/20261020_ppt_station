@@ -16,6 +16,7 @@ const state = {
   shown: {},      // 页号 → 右栏当前显示的稿的 draft_mtime；stream.js 据此判断"盘上的稿比显示的新"
   gen: null,      // 一键出稿状态（/generate/status），stream.js 刷新
   ratio: { orig: 4 / 3, draft: 16 / 9 },   // 两栏画幅，加载后按真实尺寸更新
+  zoom: { orig: 1, draft: 1 },             // 各栏相对"适配"的缩放倍数（Ctrl+滚轮），换页保持
 };
 
 /* ---------- 加载 ---------- */
@@ -59,6 +60,7 @@ async function render() {
   img.src = p.has_original ? api(`/page/${p.page}/original`) : "";
 
   // 右：新稿。未出稿显示等待态；出稿了 fetch 文本内联（后续编辑要直接操作 DOM）
+  $("add").hidden = true; $("addmenu").hidden = true;
   if (!p.has_draft) {
     $("svgbox").innerHTML = "";
     $("wait").innerHTML = `<span><i></i>P${p.page} 生成中…出稿后自动显示</span>`;
@@ -86,6 +88,7 @@ async function render() {
   if (vb && vb.width && vb.height) state.ratio.draft = vb.width / vb.height;
   fit();
   if (svg) editor.attach(svg, p, mtime);
+  $("add").hidden = !svg;
 }
 
 // 右栏右上角状态签：编辑状态优先，其次说明裁决对导出意味着什么
@@ -101,17 +104,42 @@ function drawChip(msg, cls = "") {
 
 /* ---------- 布局：两栏按各自画幅等比放到最大 ---------- */
 function fit() {
-  for (const [pane, slide, ratio] of [["orig-pane", "orig-slide", state.ratio.orig],
-                                      ["draft-pane", "draft-slide", state.ratio.draft]]) {
-    const r = $(pane).getBoundingClientRect();
-    // 预留上方 28px 给"原页/新稿"标签，左右各 24px 呼吸
-    const w = Math.max(0, Math.min(r.width - 48, (r.height - 56) * ratio));
-    $(slide).style.width = w + "px";
-    $(slide).style.height = w / ratio + "px";
+  for (const key of ["orig", "draft"]) {
+    const ratio = state.ratio[key], z = state.zoom[key];
+    const r = $(`${key}-pane`).getBoundingClientRect();
+    // 适配尺寸：预留上方 28px 给"原页/新稿"标签，左右各 24px 呼吸；再乘这一栏的缩放倍数
+    const w = Math.max(0, Math.min(r.width - 48, (r.height - 56) * ratio)) * z;
+    $(`${key}-slide`).style.width = w + "px";
+    $(`${key}-slide`).style.height = w / ratio + "px";
+    $(`${key}-label`).innerHTML = (key === "orig" ? "原页" : "新稿") +
+      (Math.abs(z - 1) > 0.01 ? `<span class="z">${Math.round(z * 100)}%</span>` : "");
   }
   editor.syncOverlay();     // 画布尺寸变了，选中框跟着走
 }
 addEventListener("resize", fit);
+
+/* ---------- Ctrl+滚轮：缩放鼠标所在那一栏的稿件，而不是整个网页 ---------- */
+// 以鼠标位置为中心：缩放前后，鼠标下面的那个点保持不动（看图软件的手感）
+function zoomPane(key, factor, cx, cy) {
+  const slide = $(`${key}-slide`), sc = $(`${key}-scroll`);
+  const before = slide.getBoundingClientRect();
+  if (cx === undefined) { const r = sc.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+  const fx = (cx - before.left) / before.width, fy = (cy - before.top) / before.height;
+  state.zoom[key] = Math.max(0.5, Math.min(6, state.zoom[key] * factor));
+  fit();
+  const after = slide.getBoundingClientRect();
+  sc.scrollLeft += after.left + fx * after.width - cx;
+  sc.scrollTop += after.top + fy * after.height - cy;
+}
+// passive:false 才能 preventDefault —— 拦下浏览器自己的整页缩放
+addEventListener("wheel", (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  const pane = e.target.closest && e.target.closest(".pane");
+  if (!pane) return;
+  // 触控板捏合也会以 Ctrl+滚轮 送来，deltaY 小而密；指数换算让鼠标滚轮和触控板手感一致
+  zoomPane(pane.id === "orig-pane" ? "orig" : "draft", Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+}, { passive: false });
 
 /* ---------- 两栏分隔条：拖动改左右宽度（有时要把右栏放大细看） ---------- */
 const SPLIT_KEY = "wb.split";   // 记在浏览器里：换页、刷新都保持；纯界面偏好，不写进任务文件
@@ -380,12 +408,18 @@ $("menu").onclick = async (e) => {
     else if (redraw.length) banner(`${redraw.length} 页标了重绘、等 agent 重画：${redraw.slice(0, 8).join("、")}`, [], 12000);
     else banner("全部已裁决 · 在聊天里说「导出」生成 .pptx", [], 12000);
   } else if (act === "keys") {
-    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 右栏单击选中单个文字框/框（框连同框里的字一起动）、再按住拖动、方向键微调（Shift ×10）· Alt+单击选整组 · 双击改字 · Delete 删除 · Ctrl+Z 撤销 · Ctrl+S 保存 · 拖两栏中间的竖条调宽度", [], 15000);
+    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 右栏单击选中单个文字框/框（框连同框里的字一起动）、再按住拖动、方向键微调（Shift ×10）· 右下角方块缩放 · 箭头拖两端圆点改端点、拖小方块改弯度 · Alt+单击选整组 · 双击改字 · Delete 删除 · 右下角 + 新建 · Ctrl+Z 撤销 · Ctrl+S 保存 · Ctrl+滚轮缩放稿件、Ctrl+0 复原 · 拖两栏中间的竖条调宽度", [], 20000);
   }
 };
 
 /* ---------- 键盘 ---------- */
 document.addEventListener("keydown", (e) => {
+  // Ctrl+0 / Ctrl+= / Ctrl+- 也归稿件缩放（不让浏览器缩放整页）；输入框里也拦，免得打字时误缩整页
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === "0") { e.preventDefault(); state.zoom.orig = state.zoom.draft = 1; fit(); return; }
+    if (e.key === "=" || e.key === "+") { e.preventDefault(); zoomPane("draft", 1.25); return; }
+    if (e.key === "-") { e.preventDefault(); zoomPane("draft", 0.8); return; }
+  }
   if (e.target.tagName === "INPUT") return;
   if (editor.handleKey(e)) return;          // 编辑器先接：Ctrl+Z/S、Esc、选中时的方向键
   if (e.ctrlKey || e.metaKey || e.altKey) return;
