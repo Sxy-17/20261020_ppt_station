@@ -27,6 +27,7 @@ async function load() {
   if (d.error) { $("deck").textContent = d.error; return; }
   if (rq && rq.ok) { const q = await rq.json(); if (Array.isArray(q)) state.requests = q; }
   state.pages = d.pages;
+  state.agentOnline = !!d.agent_online;
   $("deck").textContent = d.info.source_original_name || TASK;
   $("deck").title = TASK;
   document.title = `${$("deck").textContent} · 工作台`;
@@ -98,7 +99,12 @@ function drawChip(msg, cls = "") {
   if (msg) { c.textContent = msg; return; }
   if (editor.dirty) { c.className = "dirty"; c.textContent = "未保存 · Ctrl+S"; }
   else if (p && p.verdict === "keep") c.textContent = "导出时用原图";
-  else if (p && p.verdict === "redraw") c.textContent = "已交给 agent 重绘";
+  else if (p && p.verdict === "redraw") {
+    const job = state.requests.find((r) => r.page === p.page && r.type === "redraw" && (r.status === "queued" || r.status === "working"));
+    c.textContent = !job ? "已标重绘" : job.status === "working" ? "已标重绘 · agent 正在重画"
+      : state.agentOnline ? "已标重绘 · 排队等 agent" : "已标重绘 · agent 未值守，还没人处理";
+    if (job && job.status !== "working" && !state.agentOnline) c.className = "bad";
+  }
   else c.textContent = "";
 }
 
@@ -112,7 +118,7 @@ function fit() {
     $(`${key}-slide`).style.width = w + "px";
     $(`${key}-slide`).style.height = w / ratio + "px";
     $(`${key}-label`).innerHTML = (key === "orig" ? "原页" : "新稿") +
-      (Math.abs(z - 1) > 0.01 ? `<span class="z">${Math.round(z * 100)}%</span>` : "");
+      (Math.abs(z - 1) > 0.01 ? `<span class="z" data-pane="${key}" title="点一下恢复适配（Ctrl+0）">缩放 ${Math.round(z * 100)}%</span>` : "");
   }
   editor.syncOverlay();     // 画布尺寸变了，选中框跟着走
 }
@@ -131,6 +137,11 @@ function zoomPane(key, factor, cx, cy) {
   sc.scrollLeft += after.left + fx * after.width - cx;
   sc.scrollTop += after.top + fy * after.height - cy;
 }
+// 点标签上的"缩放 xx%"复原这一栏
+document.addEventListener("click", (e) => {
+  const z = e.target.closest && e.target.closest(".label .z");
+  if (z) { state.zoom[z.dataset.pane] = 1; fit(); }
+});
 // passive:false 才能 preventDefault —— 拦下浏览器自己的整页缩放
 addEventListener("wheel", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
@@ -180,7 +191,7 @@ function drawTop() {
 
   const strip = $("strip");
   if (strip.children.length !== state.pages.length) {
-    strip.innerHTML = state.pages.map((_, i) => `<div class="cell" data-i="${i}"></div>`).join("");
+    strip.innerHTML = state.pages.map((q, i) => `<div class="cell" data-i="${i}">${q.page}</div>`).join("");
   }
   state.pages.forEach((q, i) => {
     const c = strip.children[i];
@@ -190,6 +201,13 @@ function drawTop() {
     const st = !q.has_draft ? "生成中" : VERDICT_LABEL[q.verdict] || "待审";
     c.title = `P${q.page}${q.title ? " · " + q.title : ""} · ${st}${n ? ` · 意见处理中 ${n}` : ""}`;
   });
+
+  // 换页时把当前格滚进视野；没换页就不动，免得和用户手动滚页带"抢"
+  if (state.stripCur !== state.cur) {
+    state.stripCur = state.cur;
+    const c = strip.children[state.cur], sr = strip.getBoundingClientRect(), cr = c.getBoundingClientRect();
+    if (cr.left < sr.left || cr.right > sr.right) strip.scrollLeft += cr.left - sr.left - sr.width / 2 + cr.width / 2;
+  }
 
   const done = state.pages.filter((q) => q.verdict).length;
   const ready = state.pages.filter((q) => q.has_draft).length;
@@ -203,6 +221,12 @@ $("strip").onclick = (e) => {
   const c = e.target.closest(".cell");
   if (c) go(+c.dataset.i);
 };
+// 页带上的竖向滚轮转成横向滚动：普通鼠标没有横滚轮
+$("strip").addEventListener("wheel", (e) => {
+  if (e.ctrlKey || e.metaKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  e.preventDefault();
+  $("strip").scrollLeft += e.deltaY;
+}, { passive: false });
 
 // 点页码 → 原地变输入框，回车跳转
 $("pageno").onclick = () => {
@@ -311,8 +335,13 @@ function drawOpinion() {
   if (!p) return;
   const n = pendingOf(p.page);
   const working = state.requests.some((r) => r.page === p.page && r.status === "working");
-  $("op-state").className = n ? "busy" : "";
-  $("op-state").textContent = !n ? "" : working ? `agent 正在改这页（${n} 条）` : `已交给 agent · 排队 ${n} 条`;
+  // 说实话：排着队不等于有人在做。agent 没在值守时明说，并告诉用户怎么让它开始
+  const s = $("op-state");
+  if (!n) { s.className = ""; s.textContent = ""; }
+  else if (working) { s.className = "busy"; s.textContent = `agent 正在改这页（${n} 条）`; }
+  else if (state.agentOnline) { s.className = "busy"; s.textContent = `排队 ${n} 条 · agent 值守中，马上轮到`; }
+  else { s.className = "idle"; s.textContent = `排队 ${n} 条 · agent 未值守：在聊天里说「值守」才会处理`; }
+  s.title = s.textContent;
 }
 
 let sending = false;

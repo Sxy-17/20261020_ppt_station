@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -28,9 +29,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # station/：导入 req_queue / draft_store
 import req_queue  # noqa: E402
 from draft_store import mtime_of  # noqa: E402
+from locks import replace_retry  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+
+HEARTBEAT = "agent_watch.json"
+
+
+def heartbeat(task: Path) -> None:
+    """值守心跳：每查一次队列写一次时间。工作台据此显示「agent 值守中 / 未值守」——
+    否则用户按了重绘，界面写"已交给 agent"，其实根本没人在处理（用户实测困惑）"""
+    tmp = task / (HEARTBEAT + ".tmp")
+    tmp.write_text(json.dumps({"pid": os.getpid(), "last_seen": time.time()}), encoding="utf-8")
+    replace_retry(tmp, task / HEARTBEAT)
 
 
 def main() -> int:
@@ -55,6 +68,7 @@ def main() -> int:
 
     deadline = time.time() + args.timeout
     while time.time() < deadline:
+        heartbeat(task)
         job = req_queue.claim_next_page(task)
         if job:
             pdir = task / "pages" / f"{job['page']:03d}"

@@ -16,6 +16,7 @@
   async function pollPages() {
     const d = await (await fetch(api("/pages"), { cache: "no-store" })).json();
     if (!d.pages || !state.pages.length) return;
+    state.agentOnline = !!d.agent_online;
     const cur = state.pages[state.cur];
     const byPage = new Map(state.pages.map((p) => [p.page, p]));
 
@@ -50,7 +51,9 @@
       }
     } else {
       drawTop(); drawVerdicts();                  // 只刷新页带和裁决键（聊天里裁决的也会同步过来）
+      if (!editor.busy()) drawChip();             // 状态签跟着 agent 在线/处理进度变（编辑中别覆盖"未保存"）
     }
+    drawOpinion();
   }
 
   async function pollRequests() {

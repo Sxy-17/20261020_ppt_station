@@ -158,7 +158,18 @@ def api_pages(name: str):
     info = {}
     if (d / "project.json").exists():
         info = json.loads((d / "project.json").read_text(encoding="utf-8"))
-    return jsonify({"task": name, "info": info, "pages": pages})
+    return jsonify({"task": name, "info": info, "pages": pages, "agent_online": agent_online(d)})
+
+
+def agent_online(d: Path) -> bool:
+    """agent 是否在值守：wait_requests.py 每 2 秒写一次心跳（agent_watch.json），
+    20 秒内有心跳算在线（留出 agent 领完活、改稿期间不查队列的空档由"working"状态表达）"""
+    import time
+    f = d / "agent_watch.json"
+    try:
+        return time.time() - json.loads(f.read_text(encoding="utf-8")).get("last_seen", 0) < 20
+    except Exception:  # noqa: BLE001 —— 没有/坏心跳 = 不在线
+        return False
 
 
 @app.get("/api/task/<name>/page/<int:n>/original")

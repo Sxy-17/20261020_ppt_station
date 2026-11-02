@@ -23,17 +23,28 @@ input { font: inherit; color: inherit; }
 #pageno:hover { background: var(--surface-2); }
 #pageno input { width: 44px; background: var(--surface-2); border: 1px solid var(--accent); border-radius: 3px;
   text-align: center; outline: none; }
-/* 页带：一页一格，取代进度条/下拉/胶片条/总览（PLAN §8.3） */
-#strip { flex: 1; display: flex; gap: 2px; align-items: center; height: 24px; min-width: 0; }
-.cell { flex: 1 1 0; max-width: 14px; min-width: 2px; height: 10px; border-radius: 2px; position: relative;
-  background: #3a3f46; cursor: pointer; transition: background .12s; }
-.cell:hover { background: #4a5059; }
-.cell.wait { background: transparent; box-shadow: inset 0 0 0 1px #3a3f46; cursor: default; }
-.cell.pass { background: var(--pass); } .cell.keep { background: var(--keep); } .cell.redraw { background: var(--redraw); }
-.cell.cur { outline: 1.5px solid var(--text); outline-offset: 2px; }
-/* 橙点 = 这页有意见在 agent 那儿排队/处理中 */
-.cell.pending::after { content: ""; position: absolute; top: -6px; left: 50%; width: 4px; height: 4px;
-  margin-left: -2px; border-radius: 50%; background: var(--accent); }
+/* 页带：一页一格（格里写页号），取代进度条/下拉/胶片条/总览（PLAN §8.3）。
+   页多时放不下：横向滚动，底下有可拖的细滚动条；鼠标滚轮在页带上也是横向滚 */
+#strip { flex: 1; display: flex; gap: 3px; align-items: center; height: 36px; min-width: 0;
+  overflow-x: auto; overflow-y: hidden; padding: 0 2px; scrollbar-width: thin; scrollbar-color: #4a5059 transparent; }
+#strip::-webkit-scrollbar { height: 6px; }
+#strip::-webkit-scrollbar-thumb { background: #4a5059; border-radius: 3px; }
+#strip::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+#strip::-webkit-scrollbar-track { background: transparent; }
+.cell { flex: none; width: 26px; height: 20px; border-radius: 3px; position: relative;
+  background: #353a41; color: var(--dim); font-size: 10px; line-height: 20px; text-align: center;
+  cursor: pointer; user-select: none; transition: background .12s; }
+.cell:hover { background: #454b54; color: var(--text); }
+.cell.wait { background: transparent; box-shadow: inset 0 0 0 1px #3a3f46; color: var(--faint); cursor: pointer; }
+.cell.pass { background: var(--pass); color: #0e1712; }
+.cell.keep { background: var(--keep); color: #10151b; }
+.cell.redraw { background: var(--redraw); color: #15111d; }
+/* 当前页：内描边（外描边会被页带的滚动区裁掉） */
+.cell.cur { box-shadow: inset 0 0 0 2px var(--text); color: var(--text); font-weight: 600; }
+.cell.cur.pass, .cell.cur.keep, .cell.cur.redraw { color: #000; }
+/* 橙点 = 这页有意见/重绘在 agent 那儿排队或处理中 */
+.cell.pending::after { content: ""; position: absolute; top: 2px; right: 2px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1px var(--bg); }
 #tally { color: var(--dim); white-space: nowrap; }
 #more { width: 32px; height: 28px; border-radius: 4px; color: var(--dim); font-size: 16px; letter-spacing: 1px; }
 #more:hover { background: var(--surface-2); color: var(--text); }
@@ -55,7 +66,9 @@ input { font: inherit; color: inherit; }
 body.resizing, body.resizing * { cursor: col-resize !important; user-select: none; }
 .pane { position: relative; min-height: 0; background: var(--surface); border-radius: 6px; overflow: hidden; }
 .label { position: absolute; top: 8px; left: 12px; color: var(--faint); font-size: 12px; z-index: 8; pointer-events: none; }
-.label .z { color: var(--accent); margin-left: 6px; }
+/* 缩放比例：写明"缩放"免得被看成进度；可点，点了复原 */
+.label .z { color: var(--accent); margin-left: 8px; pointer-events: auto; cursor: pointer; }
+.label .z:hover { text-decoration: underline; }
 /* 可滚动内层：用 flex + margin:auto 居中——放大后超出的部分两边都能滚到
    （grid 的 place-items:center 会把左/上超出的部分裁掉，滚不过去） */
 .scroller { position: absolute; inset: 0; overflow: auto; display: flex; }
@@ -141,6 +154,7 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 #op-input::placeholder { color: var(--faint); }
 #op-state { color: var(--dim); font-size: 12px; white-space: nowrap; }
 #op-state.busy { color: var(--accent); }
+#op-state.idle { color: var(--bad); }
 
 /* 新稿被 agent 换掉时闪一下边框，让人知道"这不是刚才那张了" */
 .flash { animation: flash .6s ease; }
