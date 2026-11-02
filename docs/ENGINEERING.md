@@ -29,6 +29,7 @@
 | R18 | **验证链禁用管道吞码**：`cmd \| tail -1 && next` 的退出码是 tail 的，cmd 失败照样往下跑；要接管道必须 `set -o pipefail` 或 `${PIPESTATUS[0]}`；成败判断永远看真实退出码+关键输出行 | #15：失败被 tail 吞成 0，旧产物冒充新产物 |
 | R19 | **拓扑图一个语义单元一个组**：节点+边+标签同属一个 root 组（内部用匿名子组），不要把每条边拆成独立 root 组——连线外接矩形必然与节点矩形相交，必撞 bounds 重叠检查 | P2 重绘质检 8 个 blocking overlap |
 | R20 | **强调有三形态+两个 XML 盲区，抽取必须全覆盖**：①run 颜色（srgbClr **和 schemeClr 引用**——hlink 可能恰是红）②文字级 u= 下划线 + 独立线形状（line_marks）③ink 墨迹（ppt/ink 部件，放映手绘，XML 难确定解析→视觉标注层承载）；任何一类漏抓=丢老师划的重点 | #13 #16 #17 三连抓 |
+| R22 | **前端没在浏览器里跑过就不算完成**：commit 前 `node --check station/static/*.js` 全过；每个 UI 里程碑附一张无头浏览器截图（真实任务稿），截图里能看到本次新增的控件；异步渲染后的挂钩必须在新内容落进 DOM 之后执行 | #25：编辑器语法错误连续 7 个 commit 无人发现 |
 
 ## 二、失误记录
 
@@ -70,3 +71,5 @@
 | 23 | 1028 | 好稿保存后中文变问号——curl 参数体经 Windows argv 按代码页转码（中文→?），OK 响应掩盖了内容损坏 | #22 的 argv 变体：任何非 ASCII 体都可能经 shell→exe 边界被重编码 | 测二进制/UTF-8 体一律 --data-binary @file；生产路径 fetch 无此问题 |
 
 | 24 | 1102 | 工作台右栏 draft 全部隐形（用户外区实测）——SVG 无 width/height + pane-body flex 不拉伸子级 → 高度塌缩为 0；qc.py ROOT=parents[2] 层级错（#23 遗漏） | CSS 布局链与 SVG 生成方言契约缺口 | 修 CSS(#draft-holder 定尺寸)；Bug B 加 5s 全局轮询；qc.py ROOT 修正 |
+
+| 25 | 1102 | UI/UX 重构诊断发现：`edit.js` 自 M4.3（a0473f3）起字符串内含真实换行 → 整文件 SyntaxError，编辑器从未加载，M4.3–M4.9 只存在于 commit message；另有 render 异步后同步挂钩、流式轮询跳页/重载当前页、导出不读裁决等 | M3/M4 验收没在浏览器里用真实稿跑过，commit 即当完成 | R22；工作台前端按 PLAN §8 重写 |
