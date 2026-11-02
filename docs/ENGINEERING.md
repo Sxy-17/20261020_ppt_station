@@ -73,3 +73,5 @@
 | 24 | 1102 | 工作台右栏 draft 全部隐形（用户外区实测）——SVG 无 width/height + pane-body flex 不拉伸子级 → 高度塌缩为 0；qc.py ROOT=parents[2] 层级错（#23 遗漏） | CSS 布局链与 SVG 生成方言契约缺口 | 修 CSS(#draft-holder 定尺寸)；Bug B 加 5s 全局轮询；qc.py ROOT 修正 |
 
 | 25 | 1102 | UI/UX 重构诊断发现：`edit.js` 自 M4.3（a0473f3）起字符串内含真实换行 → 整文件 SyntaxError，编辑器从未加载，M4.3–M4.9 只存在于 commit message；另有 render 异步后同步挂钩、流式轮询跳页/重载当前页、导出不读裁决等 | M3/M4 验收没在浏览器里用真实稿跑过，commit 即当完成 | R22；工作台前端按 PLAN §8 重写 |
+
+| 26 | 1102 | 旧工作台右栏所有贴图页（keep_page / figure）图片 404：draft 里 `href="../images/x"` 按页面地址 `/` 解析成 `/images/x`，服务器无此路由 | 内联 SVG 的相对路径按宿主页面 URL 解析，不按 SVG 文件位置；验收没用含图片的真实稿 | R22；新工作台挂在 `/t/<任务>/p/`，`../images/x` 落到 `/t/<任务>/images/x`，查找规则与 export.py 一致，稿件不改 |

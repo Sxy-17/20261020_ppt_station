@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PPT 翻新工作台</title>
+<!-- 绝对路径：页面挂在 /t/<任务>/p/ 下（见 server.py workbench 的注释），相对路径会错位 -->
+<link rel="stylesheet" href="/static/workbench.css">
+</head>
+<body>
+
+<header id="top">
+  <span id="deck">—</span>
+  <span id="pageno" title="点击输入页码跳转"></span>
+  <div id="strip"></div>
+  <span id="tally"></span>
+</header>
+
+<main id="main">
+  <section class="pane" id="orig-pane">
+    <span class="label">原页</span>
+    <div class="slide" id="orig-slide"><img id="orig-img" alt="原页"></div>
+  </section>
+  <section class="pane" id="draft-pane">
+    <span class="label">新稿</span>
+    <div class="slide" id="draft-slide">
+      <div id="svgbox"></div>
+      <div id="wait" hidden></div>
+    </div>
+  </section>
+</main>
+
+<footer id="bottom">
+  <!-- 裁决与意见在 R2/R3 接入；先占好位置，确认布局 -->
+  <div class="verdicts">
+    <button class="vb" data-v="keep" disabled><kbd>1</kbd>保留原图</button>
+    <button class="vb" data-v="pass" disabled><kbd>2</kbd>通过</button>
+    <button class="vb" data-v="redraw" disabled><kbd>3</kbd>重绘</button>
+  </div>
+  <label id="opinion">
+    <input id="op-input" placeholder="意见框（下一步接入）" disabled>
+  </label>
+</footer>
+
+<script src="/static/workbench.js"></script>
+</body>
+</html>

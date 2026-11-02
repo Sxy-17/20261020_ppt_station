@@ -54,6 +54,40 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.get("/t/<name>/p/")
+def workbench(name: str):
+    """新工作台（PLAN §8）。
+    为什么挂在 /t/<任务>/p/ 这么深：draft.svg 里图片写的是 ../images/xxx（导出契约，不能改），
+    内联 SVG 的相对路径按"页面地址"解析——页面在 /t/<任务>/p/ 时，../images/x 恰好落到
+    /t/<任务>/images/x，由下面的 workbench_image 兑现。稿件一字不改，审核所见=导出所得。"""
+    if task_dir(name) is None:
+        return jsonify({"error": "任务不存在"}), 404
+    return send_from_directory(app.static_folder, "workbench.html")
+
+
+@app.get("/t/<name>/images/<fn>")
+def workbench_image(name: str, fn: str):
+    """draft 引用的图片。查找规则与 station/export/export.py 的 staging 搬运一致（两处要同步改）：
+      pNNN_original.png → pages/NNN/original.png（保留原样整页贴图）
+      NNN_figure_K.ext  → pages/NNN/figure_K.ext（提取出的原插图）
+      其他              → <任务>/images/<名>（上传的素材）"""
+    import re
+    d = task_dir(name)
+    if d is None or any(c in fn for c in "/\\") or ".." in fn:
+        return jsonify({"error": "参数非法"}), 404
+    m = re.fullmatch(r"p(\d+)_original\.(png|jpg)", fn)
+    m2 = re.fullmatch(r"(\d+)_figure_(\d+)\.(png|jpg|jpeg|gif)", fn)
+    if m:
+        f = d / "pages" / f"{int(m.group(1)):03d}" / f"original.{m.group(2)}"
+    elif m2:
+        f = d / "pages" / f"{int(m2.group(1)):03d}" / f"figure_{m2.group(2)}.{m2.group(3)}"
+    else:
+        f = d / "images" / fn
+    if not f.exists():
+        return jsonify({"error": "图片不存在"}), 404
+    return send_file(f)
+
+
 @app.get("/outline/<name>")
 def outline_page(name: str):
     """大纲卡片确认页（M6.2，B 路线命门闸）"""
