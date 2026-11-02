@@ -150,6 +150,41 @@ window.refreshPendingCount = refreshPendingCount;
 // ---------- 批量裁决后刷新（overview.js 派发） ----------
 document.addEventListener("pages-updated", () => { buildPageSelect(); render(state.cur); });
 
+// ---------- 一键出稿（新用户零命令行） ----------
+const genBtn = document.createElement("button");
+genBtn.id = "btn-generate";
+genBtn.className = "vbtn";
+genBtn.textContent = "⚡ 一键出稿";
+genBtn.title = "为所有没有初稿的页批量生成（80分快照，图形页贴原图）";
+document.querySelector(".mode-toggle").before(genBtn);
+
+let genTimer = null;
+genBtn.onclick = async () => {
+  const r = await fetch(`/api/task/${state.task}/generate`, { method: "POST" });
+  const d = await r.json();
+  if (!d.ok && d.error !== "生成进行中") { alert(d.error); return; }
+  genBtn.textContent = "⏳ 生成中…";
+  genBtn.disabled = true;
+  // 轮询：新 draft 出现即刷新
+  genTimer = setInterval(async () => {
+    const s = await (await fetch(`/api/task/${state.task}/generate/status`)).json();
+    if (!s.running) {
+      clearInterval(genTimer);
+      genBtn.textContent = "⚡ 一键出稿";
+      genBtn.disabled = false;
+      await loadTask(state.task);  // 整体刷新
+      return;
+    }
+    genBtn.textContent = `⏳ ${s.drafts}/${s.total}`;
+    // 流式：有新稿就刷新当前页
+    if (s.drafts > (genBtn.dataset.last || 0)) {
+      genBtn.dataset.last = s.drafts;
+      await loadTask(state.task);
+      render(state.cur);
+    }
+  }, 2000);
+};
+
 // ---------- 启动：hash 定位任务，缺省列第一个 ----------
 (async () => {
   const hash = location.hash.replace("#", "");

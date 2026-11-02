@@ -281,3 +281,6 @@ body.b-mode .vbtn.v-keep, body.b-mode .vbtn.v-redraw { display: none; }
   border: 1px solid var(--line); background: #fff; }
 .tprev img { width: 100%; display: block; }
 .tpl-card { min-width: 220px; }
+
+#btn-generate { color: var(--star); font-weight: 600; }
+#btn-generate:disabled { color: var(--text-dim); }

@@ -324,6 +324,55 @@ def api_selection(name: str):
     return jsonify({"ok": True, **sel})
 
 
+import subprocess as _sp
+import threading as _th
+
+# 生成状态（内存即可：重启后读 draft 数判断）
+_gen_status = {"running": False, "last_output": ""}
+
+
+@app.post("/api/task/<name>/generate")
+def api_generate(name: str):
+    """一键出稿（M4.10）：工作台内直接触发 batch_draft.py，新用户零命令行"""
+    d = task_dir(name)
+    if d is None:
+        return jsonify({"error": "任务不存在"}), 404
+    if _gen_status["running"]:
+        return jsonify({"error": "生成进行中", "output": _gen_status["last_output"][:500]}), 409
+    _gen_status["running"] = True
+    _gen_status["last_output"] = ""
+
+    def run():
+        try:
+            r = _sp.run(
+                [sys.executable, str(ROOT / "station" / "prep" / "batch_draft.py"), str(d)],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                cwd=str(ROOT), timeout=600)
+            _gen_status["last_output"] = (r.stdout + r.stderr)[-2000:]
+        except Exception as exc:  # noqa: BLE001
+            _gen_status["last_output"] = f"生成失败：{exc}"
+        finally:
+            _gen_status["running"] = False
+
+    _th.Thread(target=run, daemon=True).start()
+    return jsonify({"ok": True, "message": "批量出稿已启动（生成中，页面会逐页亮起）"})
+
+
+@app.get("/api/task/<name>/generate/status")
+def api_generate_status(name: str):
+    draft_count = 0
+    total = 0
+    d = task_dir(name)
+    if d:
+        for p in (d / "pages").glob("[0-9][0-9][0-9]"):
+            total += 1
+            if (p / "draft.svg").exists():
+                draft_count += 1
+    return jsonify({"running": _gen_status["running"],
+                    "drafts": draft_count, "total": total,
+                    "output": _gen_status["last_output"][-500:]})
+
+
 REQ_FILE = "pending_requests.jsonl"
 
 
