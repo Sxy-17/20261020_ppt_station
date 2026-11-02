@@ -34,8 +34,8 @@
       render();                                   // 正在等的这一页出稿了
     } else if (now.has_draft && shownMtime !== undefined && now.draft_mtime !== shownMtime) {
       // 盘上的稿比右栏显示的新（agent 改完）
-      if (editor.dirty) {
-        // 用户手上有没保存的修改：不自动载入，问用户（同一版本只问一次）
+      if (editor.busy()) {
+        // 用户手上有没保存的修改（或正在打字）：不自动载入，问用户（同一版本只问一次）
         if (conflictAsked !== now.draft_mtime) { conflictAsked = now.draft_mtime; editor.conflict(now.draft_mtime); }
         drawTop(); drawVerdicts();
       } else {

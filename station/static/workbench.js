@@ -348,7 +348,7 @@ $("menu").onclick = async (e) => {
     else if (redraw.length) banner(`${redraw.length} 页标了重绘、等 agent 重画：${redraw.slice(0, 8).join("、")}`, [], 12000);
     else banner("全部已裁决 · 在聊天里说「导出」生成 .pptx", [], 12000);
   } else if (act === "keys") {
-    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 右栏单击选中、再按住拖动、方向键微调（Shift ×10）、Alt+单击选组内元素 · Ctrl+Z 撤销 · Ctrl+S 保存", [], 15000);
+    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 右栏单击选中、再按住拖动、方向键微调（Shift ×10）、Alt+单击选组内元素 · 双击改字 · Delete 删除 · Ctrl+Z 撤销 · Ctrl+S 保存", [], 15000);
   }
 };
 

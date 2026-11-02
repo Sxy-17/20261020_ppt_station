@@ -23,6 +23,7 @@ const editor = (() => {
     checkWip();
   };
   ed.detach = () => {
+    closeTextEdit(false);   // 调用方已经处理过保存/放弃；这里不再提交，免得改动落到下一页的状态里
     deselect(); clearQC();
     svg = null; page = null; undo = []; ed.dirty = false;
     clearTimeout(wipTimer);
@@ -72,21 +73,213 @@ const editor = (() => {
     el.classList.add("ed-sel");
     $("svgbox").classList.add("has-sel");
     $("selbox").hidden = false;
+    buildProps();
     syncOverlay();
   }
   function deselect() {
+    closeTextEdit(true);
     if (selected) selected.classList.remove("ed-sel");
     selected = null;
     $("svgbox").classList.remove("has-sel");
     $("selbox").hidden = true;
+    $("props").hidden = true;
   }
   function syncOverlay() {
-    if (!selected) return;
+    if (!selected || !selected.isConnected) return;
     const host = $("draft-slide").getBoundingClientRect(), r = selected.getBoundingClientRect();
     Object.assign($("selbox").style, { left: r.left - host.left - 3 + "px", top: r.top - host.top - 3 + "px",
       width: r.width + 6 + "px", height: r.height + 6 + "px" });
+    // 属性条放在选中框上方，不盖住任何内容：画布内上方放不下（比如选了贴顶的标题）
+    // 就借用画布上沿外面的留白；留白也不够才放到下方。水平方向不出画布
+    const pr = $("props");
+    if (pr.hidden) return;
+    const pane = $("draft-pane").getBoundingClientRect();
+    const minTop = -(host.top - pane.top - 4);          // 画布上沿以外还能用的高度（负数 = 画布外）
+    const top = r.top - host.top - pr.offsetHeight - 10;
+    pr.style.top = (top >= minTop ? top : r.bottom - host.top + 10) + "px";
+    pr.style.left = Math.max(0, Math.min(r.left - host.left, host.width - pr.offsetWidth)) + "px";
   }
   ed.syncOverlay = syncOverlay;
+
+  /* ---------- 浮动属性条：字号 / 加粗 / 颜色 / 删除（R6） ---------- */
+  // 选中范围里的文字：选的是 <text> 就是它自己；选的是组就是组里所有 <text>
+  function textsIn(el) { return el.tagName === "text" ? [el] : [...el.querySelectorAll("text")]; }
+  // 选中范围里可上色的形状：有填充的改填充，只有描边的（线、空心框）改描边
+  function shapesIn(el) {
+    const SHAPES = "rect, circle, ellipse, polygon, polyline, path, line";
+    return (el.matches(SHAPES) ? [el] : [...el.querySelectorAll(SHAPES)]).filter((s) => !isBackground(s));
+  }
+  function paintAttr(s) {
+    const f = s.getAttribute("fill");
+    return s.tagName === "line" || s.tagName === "polyline" || f === "none" ? "stroke" : "fill";
+  }
+  function fontSizeOf(t) { return parseFloat(t.getAttribute("font-size")) || parseFloat(getComputedStyle(t).fontSize) || 18; }
+
+  // 一行里"有字的片段"：直接写在 <text> 里的字算 <text> 自己，写在 tspan 里的算那个 tspan
+  function inkPieces(t) {
+    const out = [];
+    if ([...t.childNodes].some((n) => n.nodeType === 3 && n.data.trim())) out.push(t);
+    for (const s of t.querySelectorAll("tspan"))
+      if ([...s.childNodes].some((n) => n.nodeType === 3 && n.data.trim())) out.push(s);
+    return out;
+  }
+  const weightOf = (el) => parseInt(getComputedStyle(el).fontWeight, 10) || 400;
+  // 看实际渲染出来的粗细：稿里加粗常写在 tspan 上，只看 <text> 的属性会判错
+  function isBold(t) { const ps = inkPieces(t); return ps.length > 0 && ps.every((p) => weightOf(p) >= 600); }
+  function setBold(t, on) {
+    const w = on ? "bold" : "normal";
+    const ps = inkPieces(t).filter((p) => p !== t);
+    // 整行粗细一致：连同片段一起切；粗细混排（有行内强调）：只改外层，强调片段不碰
+    const uniform = ps.every((p) => (weightOf(p) >= 600) === (weightOf(ps[0]) >= 600));
+    t.setAttribute("font-weight", w);
+    if (uniform) ps.forEach((p) => { if (p.hasAttribute("font-weight")) p.setAttribute("font-weight", w); });
+  }
+
+  // 候选色 = 本页已经在用的颜色（来自模板色板，比固定色盘更贴合整份稿）
+  function pageColors() {
+    const seen = new Map();
+    for (const el of svg.querySelectorAll("[fill], [stroke]")) {
+      if (isBackground(el)) continue;
+      for (const a of ["fill", "stroke"]) {
+        const c = (el.getAttribute(a) || "").toUpperCase();
+        if (/^#[0-9A-F]{6}$/.test(c) && c !== "#FFFFFF") seen.set(c, (seen.get(c) || 0) + 1);
+      }
+    }
+    return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([c]) => c);
+  }
+
+  function buildProps() {
+    const pr = $("props"), el = selected;
+    const ts = textsIn(el), shapes = shapesIn(el);
+    let h = "";
+    if (ts.length) {
+      const bold = ts.every(isBold);
+      h += `<button data-a="fs-" title="减小字号">A−</button><span class="fs">${Math.round(fontSizeOf(ts[0]))}</span>` +
+           `<button data-a="fs+" title="增大字号">A+</button>` +
+           `<button data-a="bold" class="${bold ? "on" : ""}" title="加粗"><b>B</b></button><span class="sep"></span>`;
+    }
+    if (ts.length || shapes.length) {
+      const what = ts.length ? "文字颜色" : "颜色";
+      h += pageColors().map((c) => `<button class="sw" data-c="${c}" style="background:${c}" title="${what} ${c}"></button>`).join("");
+      h += `<label class="pick" title="其他${what}"><input type="color" data-pick></label><span class="sep"></span>`;
+    }
+    h += `<button data-a="del" title="删除（Delete）">删除</button>`;
+    pr.innerHTML = h;
+    pr.hidden = false;
+  }
+
+  function applyColor(c) {
+    c = c.toUpperCase();                                  // 方言要求全大写 #RRGGBB
+    const ts = textsIn(selected);
+    snapshot("color:" + (selected.id || ""));
+    if (ts.length) ts.forEach((t) => t.setAttribute("fill", c));
+    else shapesIn(selected).forEach((s) => s.setAttribute(paintAttr(s), c));
+    touch(selected); changed();
+  }
+
+  $("props").addEventListener("click", (e) => {
+    const a = e.target.closest("[data-a]"), sw = e.target.closest("[data-c]");
+    if (!selected || (!a && !sw)) return;
+    if (sw) { applyColor(sw.dataset.c); return; }
+    const act = a.dataset.a;
+    if (act === "del") { removeSelected(); return; }
+    const ts = textsIn(selected);
+    if (act === "bold") {
+      const on = !a.classList.contains("on");
+      snapshot();
+      ts.forEach((t) => setBold(t, on));
+    } else {
+      snapshot("fs:" + (selected.id || ""));
+      const d = act === "fs+" ? 2 : -2;
+      for (const t of ts) {
+        t.setAttribute("font-size", Math.max(8, Math.round(fontSizeOf(t) + d)));
+        // 自带字号的 tspan（比如大号强调）跟着同步放缩，保持相对大小
+        t.querySelectorAll("tspan[font-size]").forEach((s) => s.setAttribute("font-size", Math.max(8, Math.round(parseFloat(s.getAttribute("font-size")) + d))));
+      }
+    }
+    touch(selected); changed(); buildProps(); syncOverlay();
+  });
+  $("props").addEventListener("input", (e) => { if (e.target.dataset.pick !== undefined && selected) applyColor(e.target.value); });
+
+  function removeSelected() {
+    if (!selected) return;
+    snapshot();
+    const el = selected;
+    const root = rootOf(el);
+    deselect();
+    el.remove();
+    if (root && root !== el) touch(root);
+    changed();
+  }
+
+  // 改了内容的根级组：保存时格子允许扩到装下新内容（字号变大、字变长）
+  function rootOf(el) { while (el && el.parentNode !== svg) el = el.parentNode; return el; }
+  function touch(el) { const r = rootOf(el); if (r && r.dataset) r.dataset.edGrow = "1"; }
+
+  /* ---------- 双击原位改字（R6） ---------- */
+  let editing = null;   // { node: 文字节点, input, old }
+  // 对外："有没有用户还没落盘的东西"——正在打字（还没回车）也算，轮询不许此时重载右栏
+  ed.busy = () => ed.dirty || !!editing;
+  // 只改点中的那段文字节点：一行里可能夹着行内强调 tspan，整行替换会把强调抹掉
+  function textNodeAt(target) {
+    let el = target.closest("tspan, text");
+    if (!el) return null;
+    const direct = [...el.childNodes].filter((n) => n.nodeType === 3 && n.data.trim());
+    if (direct.length === 1) return direct[0];
+    if (!direct.length) {
+      // 点在只含子 tspan 的外层上：取第一个有字的叶子
+      const leaf = [...el.querySelectorAll("tspan")].find((s) => [...s.childNodes].some((n) => n.nodeType === 3 && n.data.trim()));
+      return leaf ? [...leaf.childNodes].find((n) => n.nodeType === 3 && n.data.trim()) : null;
+    }
+    return direct[0];
+  }
+  function openTextEdit(node) {
+    closeTextEdit(true);
+    const holder = node.parentNode;                       // tspan 或 text
+    const host = $("draft-slide").getBoundingClientRect(), r = holder.getBoundingClientRect();
+    const scale = svg.getScreenCTM().a;                   // 画布单位 → 屏幕像素
+    const inp = document.createElement("input");
+    inp.id = "textedit";
+    inp.value = node.data.replace(/\u00a0/g, " ");        // NBSP 显示成空格，提交时行首再转回
+    Object.assign(inp.style, {
+      left: r.left - host.left - 3 + "px", top: r.top - host.top - 3 + "px",
+      width: Math.max(r.width + 60, 140) + "px", height: r.height + 6 + "px",
+      fontSize: fontSizeOf(holder.closest("text")) * scale + "px",
+      fontWeight: getComputedStyle(holder).fontWeight,
+    });
+    $("draft-slide").appendChild(inp);
+    editing = { node, input: inp, old: node.data };
+    $("props").hidden = true;
+    inp.focus(); inp.select();
+    inp.addEventListener("keydown", (e) => {
+      e.stopPropagation();                                // 打字时 1/2/3、方向键、Delete 都不归工作台
+      if (e.key === "Enter" && !e.isComposing) closeTextEdit(true);
+      if (e.key === "Escape") closeTextEdit(false);
+    });
+    inp.addEventListener("blur", () => closeTextEdit(true));
+  }
+  function closeTextEdit(commit) {
+    if (!editing) return;
+    const { node, input, old } = editing;
+    editing = null;
+    // 行首普通空格转 NBSP：普通空格导出时会被吞掉（ENGINEERING #10）
+    const v = input.value.replace(/^ +/, (s) => "\u00a0".repeat(s.length));
+    input.remove();
+    if (commit && v !== old && node.isConnected) {
+      snapshot();
+      node.data = v;
+      touch(node.parentNode);
+      changed();
+    }
+    if (selected) { buildProps(); syncOverlay(); }
+  }
+  $("svgbox").addEventListener("dblclick", (e) => {
+    if (!svg) return;
+    // 按坐标重新命中：事件目标可能是被捕获改投的容器，不一定是鼠标下的文字
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const node = hit && svg.contains(hit) ? textNodeAt(hit) : null;
+    if (node) openTextEdit(node);
+  });
 
   /* ---------- 改动记账 ---------- */
   function snapshot(key = "") {
@@ -110,6 +303,7 @@ const editor = (() => {
     lastKey = "";
     svg.querySelectorAll(".ed-sel").forEach((n) => n.classList.remove("ed-sel"));
     selected = null;
+    $("props").hidden = true;
     if (id) { const el = svg.getElementById(id); if (el) select(el); else deselect(); } else deselect();
     changed();
   }
@@ -123,20 +317,23 @@ const editor = (() => {
     e.preventDefault();                         // 防止浏览器原生拖图片/选文字
     if (u !== selected) { select(u); return; }
     const p0 = toParent(u, e.clientX, e.clientY);
-    drag = { el: u, p0, t0: tf(u), moved: false };
-    $("svgbox").setPointerCapture(e.pointerId);
+    // 指针捕获推迟到真正开始拖：按下就捕获的话，接下来的 dblclick 会被改投给画布容器，双击改字就找不到文字了
+    drag = { el: u, p0, t0: tf(u), moved: false, pointerId: e.pointerId };
   });
   $("svgbox").addEventListener("pointermove", (e) => {
     if (!drag) return;
     const p = toParent(drag.el, e.clientX, e.clientY);
     const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
     if (!drag.moved && Math.hypot(dx, dy) < 2) return;   // 手抖不算拖
-    if (!drag.moved) { snapshot(); drag.moved = true; }
+    if (!drag.moved) {
+      snapshot(); drag.moved = true; $("props").hidden = true;   // 拖动时属性条让开
+      $("svgbox").setPointerCapture(drag.pointerId);              // 拖出画布也能继续跟手
+    }
     setTf(drag.el, drag.t0.x + dx, drag.t0.y + dy);
     syncOverlay();
   });
   $("svgbox").addEventListener("pointerup", () => {
-    if (drag && drag.moved) changed();
+    if (drag && drag.moved) { changed(); if (selected) { $("props").hidden = false; syncOverlay(); } }
     drag = null;
   });
 
@@ -147,6 +344,7 @@ const editor = (() => {
     if (ctrl && k.toLowerCase() === "z") { e.preventDefault(); doUndo(); return true; }
     if (ctrl && k.toLowerCase() === "s") { e.preventDefault(); ed.save(); return true; }
     if (k === "Escape" && selected) { deselect(); return true; }
+    if ((k === "Delete" || k === "Backspace") && selected) { e.preventDefault(); removeSelected(); return true; }
     if (k.startsWith("Arrow") && selected && !ctrl) {
       // 选中时方向键 = 微调（1px，Shift 10px）；没选中时方向键仍是翻页
       e.preventDefault();
@@ -177,8 +375,9 @@ const editor = (() => {
       let [x, y, w, h] = (g.dataset.edB0 || g.getAttribute("data-pptx-bounds")).trim().split(/[\s,]+/).map(Number);
       const own = tf(g);
       x += own.x; y += own.y;                       // 整组平移：格子跟着走，大小不变（保留生成器划的版面）
-      if (g.querySelector("[data-ed-tx]")) {
-        // 组内单个元素被挪过：格子扩到装得下新位置（只扩不缩，免得内容超出格子）
+      if (g.querySelector("[data-ed-tx]") || g.dataset.edGrow) {
+        // 组内元素挪过、或字号/文字改过：格子扩到装得下新内容（只扩不缩，免得内容超出格子）。
+        // 扩大后若撞到别的组，质检会拦下并框红——那是真问题，交给用户决定怎么让
         const [bx, by, bw, bh] = canvasBox(g);
         const x2 = Math.max(x + w, bx + bw), y2 = Math.max(y + h, by + bh);
         x = Math.min(x, bx); y = Math.min(y, by); w = x2 - x; h = y2 - y;
@@ -189,6 +388,7 @@ const editor = (() => {
     const clone = svg.cloneNode(true);
     clone.querySelectorAll(".ed-sel").forEach((n) => n.classList.remove("ed-sel"));
     clone.querySelectorAll("[class='']").forEach((n) => n.removeAttribute("class"));
+    clone.querySelectorAll("[data-ed-grow]").forEach((n) => delete n.dataset.edGrow);
     for (const el of clone.querySelectorAll("[data-ed-tx], [data-ed-t0], [data-ed-b0]")) {
       const { x, y } = tf(el), t0 = el.dataset.edT0 || "";
       if (el.dataset.edTx !== undefined) {
