@@ -44,14 +44,43 @@ const editor = (() => {
   function isBackground(el) {
     return el.id === "page-background" || el.getAttribute("data-pptx-role") === "background";
   }
-  // 点到的东西 → 可选单元：默认是根级语义组（<svg> 的直接子级）；Alt 时是元素本身
-  function unitOf(node, alt) {
+  // 点到的东西 → 可选对象。
+  // 默认 = 鼠标下那个"将来导出成一个 PPT 形状"的对象（一个文字框、一个框、一条线）：
+  //   用户要逐个文字框改属性、逐个框拖动（P3 目录每行、P7 流程图每个框）；旧版默认选整个根级组，只能整体改
+  // whole = true（Alt+单击 / 属性条「整组」）= 它所在的根级语义组
+  function unitOf(node, whole) {
     if (!svg || !svg.contains(node) || node === svg) return null;
     let el = node.tagName === "tspan" ? node.closest("text") : node;
-    if (!alt) while (el.parentNode !== svg) el = el.parentNode;
+    if (whole) el = rootOf(el);
     if (!el || el === svg || isBackground(el) || el.closest("defs")) return null;
     return el;
   }
+
+  /* ---------- 框带着框里的东西走 ---------- */
+  // 稿里的流程图框常是"一个 rect + 叠在上面的几行字"，彼此是兄弟、没有成组；
+  // 只挪 rect 字会留在原地。所以选中能装东西的形状时，完全落在它里面的对象一起移动/删除
+  const CONTAINER = "rect, ellipse, circle, polygon";
+  const LEAF = "text, rect, ellipse, circle, polygon, polyline, path, line, image";
+  function followersOf(el) {
+    if (!el.matches(CONTAINER) || el.parentNode === svg) return [];
+    const [x, y, w, h] = canvasBox(el), tol = 2;
+    if (w < 8 || h < 8) return [];
+    const root = rootOf(el), out = [];
+    for (const c of root.querySelectorAll(LEAF)) {
+      if (c === el || c.closest("defs") || isBackground(c)) continue;
+      if (c.parentNode.closest && c.parentNode.closest("text")) continue;
+      const [cx, cy, cw, ch] = canvasBox(c);
+      if (cw * ch >= w * h) continue;                       // 比自己大的不算"里面的"（防两个同尺寸框互相带）
+      if (cx >= x - tol && cy >= y - tol && cx + cw <= x + w + tol && cy + ch <= y + h + tol) out.push(c);
+    }
+    return out;
+  }
+  let followers = [];
+  const moving = () => (selected ? [selected, ...followers] : []);
+
+  // 选中关系在撤销后要能找回来：记"从 <svg> 往下的子节点序号路径"（叶子对象大多没有 id）
+  function pathOf(el) { const p = []; while (el && el !== svg) { p.unshift([...el.parentNode.children].indexOf(el)); el = el.parentNode; } return p; }
+  function byPath(p) { let el = svg; for (const i of p) { el = el && el.children[i]; } return el && el !== svg ? el : null; }
 
   /* ---------- 位移：只用 translate，原有 transform 原样保留在后面 ---------- */
   function tf(el) { return { x: +(el.dataset.edTx || 0), y: +(el.dataset.edTy || 0) }; }
@@ -70,7 +99,8 @@ const editor = (() => {
   function select(el) {
     deselect();
     selected = el;
-    el.classList.add("ed-sel");
+    followers = followersOf(el);
+    for (const m of moving()) m.classList.add("ed-sel");
     $("svgbox").classList.add("has-sel");
     $("selbox").hidden = false;
     buildProps();
@@ -78,17 +108,28 @@ const editor = (() => {
   }
   function deselect() {
     closeTextEdit(true);
-    if (selected) selected.classList.remove("ed-sel");
+    for (const m of moving()) m.classList.remove("ed-sel");
     selected = null;
+    followers = [];
     $("svgbox").classList.remove("has-sel");
     $("selbox").hidden = true;
     $("props").hidden = true;
+    document.querySelectorAll(".selfollow").forEach((n) => n.remove());
   }
   function syncOverlay() {
     if (!selected || !selected.isConnected) return;
     const host = $("draft-slide").getBoundingClientRect(), r = selected.getBoundingClientRect();
     Object.assign($("selbox").style, { left: r.left - host.left - 3 + "px", top: r.top - host.top - 3 + "px",
       width: r.width + 6 + "px", height: r.height + 6 + "px" });
+    // 跟着走的对象：细虚线框，让用户看清"拖这个框会带走哪些"
+    document.querySelectorAll(".selfollow").forEach((n) => n.remove());
+    for (const f of followers) {
+      const fr = f.getBoundingClientRect(), d = document.createElement("div");
+      d.className = "selfollow";
+      Object.assign(d.style, { left: fr.left - host.left - 1 + "px", top: fr.top - host.top - 1 + "px",
+        width: fr.width + 2 + "px", height: fr.height + 2 + "px" });
+      $("draft-slide").appendChild(d);
+    }
     // 属性条放在选中框上方，不盖住任何内容：画布内上方放不下（比如选了贴顶的标题）
     // 就借用画布上沿外面的留白；留白也不够才放到下方。水平方向不出画布
     const pr = $("props");
@@ -163,7 +204,10 @@ const editor = (() => {
       h += pageColors().map((c) => `<button class="sw" data-c="${c}" style="background:${c}" title="${what} ${c}"></button>`).join("");
       h += `<label class="pick" title="其他${what}"><input type="color" data-pick></label><span class="sep"></span>`;
     }
-    h += `<button data-a="del" title="删除（Delete）">删除</button>`;
+    h += `<button data-a="del" title="删除（Delete）${followers.length ? `，连同框里 ${followers.length} 个对象` : ""}">删除</button>`;
+    // 选的是单个对象时，给一个跳到所在根级组的入口（等同 Alt+单击）
+    if (el.parentNode !== svg && rootOf(el) && rootOf(el).getAttribute("data-pptx-bounds"))
+      h += `<span class="sep"></span><button data-a="up" title="选中它所在的整组（Alt+单击）">整组</button>`;
     pr.innerHTML = h;
     pr.hidden = false;
   }
@@ -171,7 +215,7 @@ const editor = (() => {
   function applyColor(c) {
     c = c.toUpperCase();                                  // 方言要求全大写 #RRGGBB
     const ts = textsIn(selected);
-    snapshot("color:" + (selected.id || ""));
+    snapshot("color:" + pathOf(selected).join("."));
     if (ts.length) ts.forEach((t) => t.setAttribute("fill", c));
     else shapesIn(selected).forEach((s) => s.setAttribute(paintAttr(s), c));
     touch(selected); changed();
@@ -183,13 +227,14 @@ const editor = (() => {
     if (sw) { applyColor(sw.dataset.c); return; }
     const act = a.dataset.a;
     if (act === "del") { removeSelected(); return; }
+    if (act === "up") { select(rootOf(selected)); return; }
     const ts = textsIn(selected);
     if (act === "bold") {
       const on = !a.classList.contains("on");
       snapshot();
       ts.forEach((t) => setBold(t, on));
     } else {
-      snapshot("fs:" + (selected.id || ""));
+      snapshot("fs:" + pathOf(selected).join("."));
       const d = act === "fs+" ? 2 : -2;
       for (const t of ts) {
         t.setAttribute("font-size", Math.max(8, Math.round(fontSizeOf(t) + d)));
@@ -204,11 +249,11 @@ const editor = (() => {
   function removeSelected() {
     if (!selected) return;
     snapshot();
-    const el = selected;
-    const root = rootOf(el);
+    const els = moving();                      // 框连同框里的东西一起删（与拖动范围一致，Ctrl+Z 可恢复）
+    const root = rootOf(selected);
     deselect();
-    el.remove();
-    if (root && root !== el) touch(root);
+    els.forEach((el) => el.remove());
+    if (root && root.isConnected) touch(root);
     changed();
   }
 
@@ -298,13 +343,14 @@ const editor = (() => {
   }
   function doUndo() {
     if (!undo.length) return;
-    const id = selected && selected.id;
+    const p = selected && pathOf(selected);
     svg.innerHTML = undo.pop();
     lastKey = "";
     svg.querySelectorAll(".ed-sel").forEach((n) => n.classList.remove("ed-sel"));
-    selected = null;
+    selected = null; followers = [];
     $("props").hidden = true;
-    if (id) { const el = svg.getElementById(id); if (el) select(el); else deselect(); } else deselect();
+    const el = p && byPath(p);
+    if (el) select(el); else deselect();
     changed();
   }
 
@@ -316,20 +362,22 @@ const editor = (() => {
     if (!u) { deselect(); return; }
     e.preventDefault();                         // 防止浏览器原生拖图片/选文字
     if (u !== selected) { select(u); return; }
-    const p0 = toParent(u, e.clientX, e.clientY);
+    // 每个要动的对象各自记起点：它们可能在不同层的组里，位移要换算到各自父级坐标
+    const items = moving().map((el) => ({ el, p0: toParent(el, e.clientX, e.clientY), t0: tf(el) }));
     // 指针捕获推迟到真正开始拖：按下就捕获的话，接下来的 dblclick 会被改投给画布容器，双击改字就找不到文字了
-    drag = { el: u, p0, t0: tf(u), moved: false, pointerId: e.pointerId };
+    drag = { items, x0: e.clientX, y0: e.clientY, moved: false, pointerId: e.pointerId };
   });
   $("svgbox").addEventListener("pointermove", (e) => {
     if (!drag) return;
-    const p = toParent(drag.el, e.clientX, e.clientY);
-    const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
-    if (!drag.moved && Math.hypot(dx, dy) < 2) return;   // 手抖不算拖
+    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 3) return;   // 手抖不算拖
     if (!drag.moved) {
       snapshot(); drag.moved = true; $("props").hidden = true;   // 拖动时属性条让开
       $("svgbox").setPointerCapture(drag.pointerId);              // 拖出画布也能继续跟手
     }
-    setTf(drag.el, drag.t0.x + dx, drag.t0.y + dy);
+    for (const it of drag.items) {
+      const p = toParent(it.el, e.clientX, e.clientY);
+      setTf(it.el, it.t0.x + p.x - it.p0.x, it.t0.y + p.y - it.p0.y);
+    }
     syncOverlay();
   });
   $("svgbox").addEventListener("pointerup", () => {
@@ -348,10 +396,13 @@ const editor = (() => {
     if (k.startsWith("Arrow") && selected && !ctrl) {
       // 选中时方向键 = 微调（1px，Shift 10px）；没选中时方向键仍是翻页
       e.preventDefault();
-      const d = e.shiftKey ? 10 : 1, t = tf(selected);
-      snapshot("nudge:" + (selected.id || ""));
-      setTf(selected, t.x + (k === "ArrowLeft" ? -d : k === "ArrowRight" ? d : 0),
-                      t.y + (k === "ArrowUp" ? -d : k === "ArrowDown" ? d : 0));
+      const d = e.shiftKey ? 10 : 1;
+      snapshot("nudge:" + pathOf(selected).join("."));
+      for (const el of moving()) {
+        const t = tf(el);
+        setTf(el, t.x + (k === "ArrowLeft" ? -d : k === "ArrowRight" ? d : 0),
+                  t.y + (k === "ArrowUp" ? -d : k === "ArrowDown" ? d : 0));
+      }
       syncOverlay(); changed();
       return true;
     }

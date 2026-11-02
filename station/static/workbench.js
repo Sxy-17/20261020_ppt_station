@@ -20,9 +20,11 @@ const state = {
 
 /* ---------- 加载 ---------- */
 async function load() {
-  const r = await fetch(api("/pages"));
+  // 页清单和意见队列一起拿：打开页面时页带上的橙点（有意见在处理）立刻就有，不等第一轮轮询
+  const [r, rq] = await Promise.all([fetch(api("/pages")), fetch(api("/requests")).catch(() => null)]);
   const d = await r.json();
   if (d.error) { $("deck").textContent = d.error; return; }
+  if (rq && rq.ok) { const q = await rq.json(); if (Array.isArray(q)) state.requests = q; }
   state.pages = d.pages;
   $("deck").textContent = d.info.source_original_name || TASK;
   $("deck").title = TASK;
@@ -110,6 +112,36 @@ function fit() {
   editor.syncOverlay();     // 画布尺寸变了，选中框跟着走
 }
 addEventListener("resize", fit);
+
+/* ---------- 两栏分隔条：拖动改左右宽度（有时要把右栏放大细看） ---------- */
+const SPLIT_KEY = "wb.split";   // 记在浏览器里：换页、刷新都保持；纯界面偏好，不写进任务文件
+function setSplit(left) {
+  left = Math.max(0.2, Math.min(0.8, left));   // 两边都至少留 20%，不至于拖没了
+  $("main").style.gridTemplateColumns = `minmax(0, ${left}fr) 12px minmax(0, ${1 - left}fr)`;
+  localStorage.setItem(SPLIT_KEY, String(left));
+  fit();
+}
+(() => {
+  const saved = parseFloat(localStorage.getItem(SPLIT_KEY));
+  if (saved) $("main").style.gridTemplateColumns = `minmax(0, ${saved}fr) 12px minmax(0, ${1 - saved}fr)`;
+  const sp = $("split");
+  sp.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    sp.setPointerCapture(e.pointerId);
+    sp.classList.add("on");
+    document.body.classList.add("resizing");
+  });
+  sp.addEventListener("pointermove", (e) => {
+    if (!sp.hasPointerCapture(e.pointerId)) return;
+    const m = $("main").getBoundingClientRect();
+    const pad = 16, inner = m.width - pad * 2 - 12;          // 去掉左右内边距和分隔条自身
+    setSplit((e.clientX - m.left - pad - 6) / inner);
+  });
+  const end = (e) => { sp.classList.remove("on"); document.body.classList.remove("resizing"); };
+  sp.addEventListener("pointerup", end);
+  sp.addEventListener("lostpointercapture", end);
+  sp.addEventListener("dblclick", () => setSplit(0.5));
+})();
 
 /* ---------- 顶栏：页码 + 页带 ---------- */
 const VERDICT_LABEL = { keep: "保留原图", pass: "通过", redraw: "重绘" };
@@ -348,7 +380,7 @@ $("menu").onclick = async (e) => {
     else if (redraw.length) banner(`${redraw.length} 页标了重绘、等 agent 重画：${redraw.slice(0, 8).join("、")}`, [], 12000);
     else banner("全部已裁决 · 在聊天里说「导出」生成 .pptx", [], 12000);
   } else if (act === "keys") {
-    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 右栏单击选中、再按住拖动、方向键微调（Shift ×10）、Alt+单击选组内元素 · 双击改字 · Delete 删除 · Ctrl+Z 撤销 · Ctrl+S 保存", [], 15000);
+    banner("1 保留原图 · 2 通过 · 3 重绘（再按撤销） · ←/→ 翻页 · 右栏单击选中单个文字框/框（框连同框里的字一起动）、再按住拖动、方向键微调（Shift ×10）· Alt+单击选整组 · 双击改字 · Delete 删除 · Ctrl+Z 撤销 · Ctrl+S 保存 · 拖两栏中间的竖条调宽度", [], 15000);
   }
 };
 

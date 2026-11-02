@@ -46,7 +46,13 @@ input { font: inherit; color: inherit; }
 #menu .k { color: var(--faint); }
 
 /* ---------- 双栏 ---------- */
-#main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px; min-height: 0; }
+/* 两栏中间的分隔条可拖：有时要把右栏放大细看（列宽比例由 JS 写，记在 localStorage） */
+#main { display: grid; grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr); padding: 12px 16px; min-height: 0; }
+#split { position: relative; cursor: col-resize; touch-action: none; }
+#split::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 36px;
+  transform: translate(-50%, -50%); border-radius: 2px; background: var(--line); transition: background .12s; }
+#split:hover::after, #split.on::after { background: var(--dim); }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none; }
 .pane { position: relative; min-height: 0; display: grid; place-items: center; background: var(--surface); border-radius: 6px; }
 .label { position: absolute; top: 8px; left: 12px; color: var(--faint); font-size: 12px; z-index: 2; pointer-events: none; }
 .slide { position: relative; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
@@ -64,6 +70,8 @@ input { font: inherit; color: inherit; }
 #svgbox svg :is(g, text, rect, path, line, image, ellipse, circle, polygon, polyline) { cursor: default; }
 #svgbox.has-sel svg .ed-sel, #svgbox.has-sel svg .ed-sel * { cursor: move; }
 #selbox { position: absolute; pointer-events: none; border: 1.5px solid var(--accent); z-index: 4; }
+/* 选中框时"框里会跟着走"的对象 */
+.selfollow { position: absolute; pointer-events: none; border: 1px dashed var(--accent); opacity: .7; z-index: 4; }
 .qcbad { position: absolute; pointer-events: none; border: 1.5px dashed var(--bad);
   background: rgba(208, 103, 91, .08); z-index: 4; }
 

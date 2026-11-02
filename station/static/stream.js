@@ -21,7 +21,12 @@
 
     // 原地更新字段（对象引用不变，别处持有的 p 也跟着新）；页数变了才整体替换并按页号找回当前页
     if (d.pages.length === state.pages.length && d.pages.every((p) => byPage.has(p.page))) {
-      for (const np of d.pages) Object.assign(byPage.get(np.page), np);
+      for (const np of d.pages) {
+        const op = byPage.get(np.page);
+        // 版本号只进不退：迟到的旧响应不许把刚保存的新版本号改回去
+        if (np.draft_mtime < op.draft_mtime) np.draft_mtime = op.draft_mtime;
+        Object.assign(op, np);
+      }
     } else {
       state.pages = d.pages;
       const i = state.pages.findIndex((p) => p.page === cur.page);
@@ -32,8 +37,9 @@
     const shownMtime = state.shown[now.page];
     if (now.has_draft && shownMtime === undefined && $("svgbox").innerHTML === "") {
       render();                                   // 正在等的这一页出稿了
-    } else if (now.has_draft && shownMtime !== undefined && now.draft_mtime !== shownMtime) {
-      // 盘上的稿比右栏显示的新（agent 改完）
+    } else if (now.has_draft && shownMtime !== undefined && now.draft_mtime > shownMtime) {
+      // 盘上的稿比右栏显示的新（agent 改完）。必须用"更新"而不是"不等"：
+      // 保存前发出的轮询可能在保存完成后才回来，带着旧版本号——用 !== 会把自己刚存的稿当成别人改的去重载
       if (editor.busy()) {
         // 用户手上有没保存的修改（或正在打字）：不自动载入，问用户（同一版本只问一次）
         if (conflictAsked !== now.draft_mtime) { conflictAsked = now.draft_mtime; editor.conflict(now.draft_mtime); }
