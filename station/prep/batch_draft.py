@@ -89,8 +89,8 @@ def apply_emphasis(line: str, emphasis: list) -> list:
         if len(t) < 2:
             continue
         st = {}
-        if e.get("bold"):
-            st["bold"] = True
+        # bold 不再应用：老课件 run 级 b=1 是伪粗残留（教训：P5/P17/P20/P21/P25 五页
+        # 用户实证无真粗）。颜色/下划线仍保留；真粗页由用户在审核中点名。
         if e.get("color"):
             c = str(e["color"]).upper()
             # 原文强调色 hex 原样保留（与手绘流程图页一致：老师的红就是红，整册统一）；
@@ -194,7 +194,7 @@ def content_page(meta, text_md: str = "") -> str:
     rows, y = [], 196
     # 行距（用户实测校准 2026-11-04：P4/P5"段间距略大"）：舒适档 = 字号×1.9；
     # 长列表或预计溢出时降密集档（19px、×1.35+3），宁可密也不截断内容
-    SIZES = {0: 24, 1: 22, 2: 20}
+    SIZES = {0: 26, 1: 24, 2: 22}
 
     def est_lines(text, sz, x):
         # 粗估折行数（中文≈1×字号、拉丁≈0.55）：够用就好，真折行走 wrap_tspans
@@ -205,7 +205,7 @@ def content_page(meta, text_md: str = "") -> str:
         yy = 196
         for o in items[:22]:
             lvl = min(o.get("lvl", 0), 2)
-            sz = 19 if many else SIZES[lvl]
+            sz = 20 if many else SIZES[lvl]
             x = 80 + lvl * 44
             yy += stepfn(sz) * est_lines(o.get("text", ""), sz, x)
             if yy > 688:
@@ -218,7 +218,7 @@ def content_page(meta, text_md: str = "") -> str:
     for o in outline[:22]:
         lvl = min(o.get("lvl", 0), 2)
         if many:
-            size, x = 19, 80 + lvl * 36
+            size, x = 20, 80 + lvl * 36
         else:
             size, x = (24, 80) if lvl == 0 else ((22, 124) if lvl == 1 else (20, 168))
         tx = x + 24  # 文字右移给层级圆点让位：原文每行都带 Wingdings 圆点（用户点名保留）
@@ -226,11 +226,11 @@ def content_page(meta, text_md: str = "") -> str:
         wrapped = wrap_tspans(segs, tx, size, int((1200 - tx) * 0.93))
         # 0.93 安全系数：质检器对拉丁/湿排混行的估宽（≈0.96×字号含 headroom）比
         # wrap_tspans 的 0.55×拉丁更保守，不留余量会在质检门反复撞线（P21/70/71/85）
-        dot_sz = 8 if many else (11, 9, 8)[lvl]
+        dot_sz = 8 if many else (12, 10, 8)[lvl]
         rows.append(f'    <text x="{x + 2}" y="{y - 1}" font-size="{dot_sz}" fill="{PRIM}">●</text>')
         rows.append(f'    <text x="{tx}" y="{y}" font-size="{size}">{wrapped}</text>')
         n_lines = wrapped.count('dy=') + 1
-        y += (round(19 * 1.35) + 3) * n_lines if many else round(size * 1.9) * n_lines
+        y += (round(20 * 1.35) + 3) * n_lines if many else round(size * 1.9) * n_lines
         if y > 680:
             break
     return (HEAD.format(role="content") + title_group(meta.get("title") or "") +
