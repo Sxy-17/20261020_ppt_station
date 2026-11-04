@@ -93,7 +93,9 @@ def apply_emphasis(line: str, emphasis: list) -> list:
             st["bold"] = True
         if e.get("color"):
             c = str(e["color"]).upper()
-            st["color"] = ACC if ("FF0000" in c or "SCHEME" in c) else PRIM
+            # 原文强调色 hex 原样保留（与手绘流程图页一致：老师的红就是红，整册统一）；
+            # scheme 引用在批量层无法可靠解析成具体色，退到模板藏蓝
+            st["color"] = c if c.startswith("#") else PRIM
         if e.get("underline"):
             st["underline"] = True
         if not st:
@@ -179,9 +181,14 @@ def content_page(meta) -> str:
     for o in outline[:20]:
         lvl = min(o.get("lvl", 0), 2)
         size, x = (20, 80) if lvl == 0 else (18, 80 + lvl * 44)
+        tx = x + 24  # 文字右移给层级圆点让位：原文每行都带 Wingdings 圆点（用户点名保留）
         segs = apply_emphasis(o["text"], emphasis)
-        wrapped = wrap_tspans(segs, x, size, 1120 - (x - 80))
-        rows.append(f'    <text x="{x}" y="{y}" font-size="{size}">{wrapped}</text>')
+        wrapped = wrap_tspans(segs, tx, size, int((1200 - tx) * 0.93))
+        # 0.93 安全系数：质检器对拉丁/湿排混行的估宽（≈0.96×字号含 headroom）比
+        # wrap_tspans 的 0.55×拉丁更保守，不留余量会在质检门反复撞线（P21/70/71/85）
+        dot_sz = (10, 8, 7)[lvl]  # 三级圆点目视递减，颜色统一模板藏蓝
+        rows.append(f'    <text x="{x + 2}" y="{y - 1}" font-size="{dot_sz}" fill="{PRIM}">●</text>')
+        rows.append(f'    <text x="{tx}" y="{y}" font-size="{size}">{wrapped}</text>')
         n_lines = wrapped.count('dy=') + 1
         y += round(size * 1.55) * n_lines + (12 if lvl == 0 else 6)
         if y > 680:

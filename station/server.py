@@ -20,7 +20,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_file, send_from_directory
 
 # 与 agent 命令行工具共用的写入口（同在 station/ 下；以脚本运行时本目录已在 sys.path）
 import draft_store
@@ -56,6 +56,20 @@ def read_verdict(page_dir: Path) -> dict:
 
 @app.get("/")
 def index():
+    # 根路径直达最新任务的新工作台。为什么：旧 M3 单页工作台（index.html）已随 #25
+    # 重写废弃，但一直挂在 / 上——用户从 README 的"启动审核网页"进来就是旧 UI：
+    # 贴图页 ../images/ 在 / 下必 404、无 M4 功能，像"代码没更新"（实测掉坑）。
+    # 取 mtime 最新的任务；无任务时退回旧页（空仓场景）。
+    best, best_ts = None, -1.0
+    for pj in PROJECTS.glob("*/project.json"):
+        try:
+            ts = pj.stat().st_mtime
+        except OSError:
+            continue
+        if ts > best_ts:
+            best, best_ts = pj.parent.name, ts
+    if best:
+        return redirect(f"/t/{best}/p/")
     return send_from_directory(app.static_folder, "index.html")
 
 
