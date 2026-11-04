@@ -70,7 +70,10 @@ def index():
             best, best_ts = pj.parent.name, ts
     if best:
         return redirect(f"/t/{best}/p/")
-    return send_from_directory(app.static_folder, "index.html")
+    # 无任务：内联提示页（旧 M3 工作台已删——用户指令：废弃代码不留可访问入口，#30）
+    return ("<!doctype html><meta charset=utf-8><body style=\"font-family:sans-serif;"
+            "padding:40px\"><h2>projects/ 下还没有任务</h2>"
+            "<p>把课件放入 inbox/ 后由 AI 收编，或检查 projects/ 目录。</p>", 200)
 
 
 @app.get("/t/<name>/p/")
