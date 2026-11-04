@@ -194,7 +194,8 @@ def content_page(meta, text_md: str = "") -> str:
     rows, y = [], 196
     # 行距（用户实测校准 2026-11-04：P4/P5"段间距略大"）：舒适档 = 字号×1.9；
     # 长列表或预计溢出时降密集档（19px、×1.35+3），宁可密也不截断内容
-    SIZES = {0: 26, 1: 24, 2: 22}
+    SIZES = {0: 26, 1: 24, 2: 22, 3: 20}
+    XS = {0: 80, 1: 124, 2: 168, 3: 212}
 
     def est_lines(text, sz, x):
         # 粗估折行数（中文≈1×字号、拉丁≈0.55）：够用就好，真折行走 wrap_tspans
@@ -216,17 +217,17 @@ def content_page(meta, text_md: str = "") -> str:
     if not many and not fits(outline, lambda sz: round(sz * 1.9)):
         many = True  # 舒适档装不下 → 密集档，保证内容不丢
     for o in outline[:22]:
-        lvl = min(o.get("lvl", 0), 2)
+        lvl = min(o.get("lvl", 0), 3)
         if many:
-            size, x = 20, 80 + lvl * 36
+            size, x = 20, XS[0] + lvl * 32
         else:
-            size, x = (24, 80) if lvl == 0 else ((22, 124) if lvl == 1 else (20, 168))
+            size, x = SIZES[lvl], XS[lvl]
         tx = x + 24  # 文字右移给层级圆点让位：原文每行都带 Wingdings 圆点（用户点名保留）
         segs = apply_emphasis(o["text"], emphasis)
         wrapped = wrap_tspans(segs, tx, size, int((1200 - tx) * 0.93))
         # 0.93 安全系数：质检器对拉丁/湿排混行的估宽（≈0.96×字号含 headroom）比
         # wrap_tspans 的 0.55×拉丁更保守，不留余量会在质检门反复撞线（P21/70/71/85）
-        dot_sz = 8 if many else (12, 10, 8)[lvl]
+        dot_sz = 8 if many else (12, 10, 8, 8)[lvl]
         rows.append(f'    <text x="{x + 2}" y="{y - 1}" font-size="{dot_sz}" fill="{PRIM}">●</text>')
         rows.append(f'    <text x="{tx}" y="{y}" font-size="{size}">{wrapped}</text>')
         n_lines = wrapped.count('dy=') + 1
