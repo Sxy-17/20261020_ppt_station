@@ -192,9 +192,29 @@ def content_page(meta, text_md: str = "") -> str:
         outline = [{"text": t, "lvl": 0} for t in grab]
         # 回退条目无层级信息，长列表自然落入下面的密集级；紧凑开关由 many 统一接管
     rows, y = [], 196
-    # 字号体系（用户校准：P3 目录的字号是舒适基准，2026-11-04 实测反馈）：
-    # 常规列表 L0=24/L1=22/L2=20；条目 >12 的长列表降密集级（19 平铺）防内容区溢出截断
+    # 行距（用户实测校准 2026-11-04：P4/P5"段间距略大"）：舒适档 = 字号×1.9；
+    # 长列表或预计溢出时降密集档（19px、×1.35+3），宁可密也不截断内容
+    SIZES = {0: 24, 1: 22, 2: 20}
+
+    def est_lines(text, sz, x):
+        # 粗估折行数（中文≈1×字号、拉丁≈0.55）：够用就好，真折行走 wrap_tspans
+        avail = (1200 - x - 24) * 0.93
+        return max(1, int(len(text) * sz * 0.88 / avail) + 1)
+
+    def fits(items, stepfn):
+        yy = 196
+        for o in items[:22]:
+            lvl = min(o.get("lvl", 0), 2)
+            sz = 19 if many else SIZES[lvl]
+            x = 80 + lvl * 44
+            yy += stepfn(sz) * est_lines(o.get("text", ""), sz, x)
+            if yy > 688:
+                return False
+        return True
+
     many = len(outline) > 12
+    if not many and not fits(outline, lambda sz: round(sz * 1.9)):
+        many = True  # 舒适档装不下 → 密集档，保证内容不丢
     for o in outline[:22]:
         lvl = min(o.get("lvl", 0), 2)
         if many:
@@ -210,7 +230,7 @@ def content_page(meta, text_md: str = "") -> str:
         rows.append(f'    <text x="{x + 2}" y="{y - 1}" font-size="{dot_sz}" fill="{PRIM}">●</text>')
         rows.append(f'    <text x="{tx}" y="{y}" font-size="{size}">{wrapped}</text>')
         n_lines = wrapped.count('dy=') + 1
-        y += (round(19 * 1.35) + 3) * n_lines if many else round(size * 1.45) * n_lines + (10 if lvl == 0 else 7)
+        y += (round(19 * 1.35) + 3) * n_lines if many else round(size * 1.9) * n_lines
         if y > 680:
             break
     return (HEAD.format(role="content") + title_group(meta.get("title") or "") +
