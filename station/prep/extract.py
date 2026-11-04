@@ -167,6 +167,14 @@ def extract_page(slide, idx, total, slide_width, slide_height) -> tuple[str, dic
             for p in sh.text_frame.paragraphs:
                 if p.text.strip():
                     outline.append({"lvl": p.level, "text": p.text.strip()})
+        elif getattr(sh, "has_text_frame", False) and not getattr(sh, "is_placeholder", False):
+            # 正文写在普通文本框里的页（实测 P4：占位符只有标题，层级列表全在 TEXT_BOX）：
+            # 段落 lvl 属性同样是 OOXML 大纲层级，漏读则换模板时层级平铺丢失（用户点名
+            # "缩进得按原版"）。只认段落 ≥3 的列表型文本框，避免把图注/标签小框灌进大纲。
+            paras = [p for p in sh.text_frame.paragraphs if p.text.strip()]
+            if len(paras) >= 3:
+                for p in paras:
+                    outline.append({"lvl": p.level, "text": p.text.strip()})
         # 细长形状 = 手画线标记（下划线/波浪线以独立形状存在）：位置供初稿重现
         try:
             w, h = sh.width or 0, sh.height or 0

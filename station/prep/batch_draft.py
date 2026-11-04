@@ -175,22 +175,42 @@ def toc_page(meta) -> str:
             "\n".join(rows) + "\n  </g>\n" + TAIL)
 
 
-def content_page(meta) -> str:
+def content_page(meta, text_md: str = "") -> str:
     outline, emphasis = meta.get("outline", []), meta.get("emphasis", [])
+    if not outline:
+        # 回退：无大纲层级的页（extract 抽不出 lvl，如 P4/P50）用「## 文字」行当 L0 条目；
+        # 否则 body-list 全空（用户实测 P4"没字啊"）。首行若与标题重复则跳过。
+        grab, in_sec = [], False
+        for ln in text_md.splitlines():
+            if ln.startswith("## "):
+                in_sec = ln.startswith("## 文字")
+                continue
+            if in_sec and ln.strip() and not ln.startswith("#"):
+                grab.append(ln[2:] if ln.startswith("- ") else ln)
+        if grab and grab[0].strip() == (meta.get("title") or "").strip():
+            grab = grab[1:]
+        outline = [{"text": t, "lvl": 0} for t in grab]
+        # 回退条目无层级信息，长列表自然落入下面的密集级；紧凑开关由 many 统一接管
     rows, y = [], 196
-    for o in outline[:20]:
+    # 字号体系（用户校准：P3 目录的字号是舒适基准，2026-11-04 实测反馈）：
+    # 常规列表 L0=24/L1=22/L2=20；条目 >12 的长列表降密集级（19 平铺）防内容区溢出截断
+    many = len(outline) > 12
+    for o in outline[:22]:
         lvl = min(o.get("lvl", 0), 2)
-        size, x = (20, 80) if lvl == 0 else (18, 80 + lvl * 44)
+        if many:
+            size, x = 19, 80 + lvl * 36
+        else:
+            size, x = (24, 80) if lvl == 0 else ((22, 124) if lvl == 1 else (20, 168))
         tx = x + 24  # 文字右移给层级圆点让位：原文每行都带 Wingdings 圆点（用户点名保留）
         segs = apply_emphasis(o["text"], emphasis)
         wrapped = wrap_tspans(segs, tx, size, int((1200 - tx) * 0.93))
         # 0.93 安全系数：质检器对拉丁/湿排混行的估宽（≈0.96×字号含 headroom）比
         # wrap_tspans 的 0.55×拉丁更保守，不留余量会在质检门反复撞线（P21/70/71/85）
-        dot_sz = (10, 8, 7)[lvl]  # 三级圆点目视递减，颜色统一模板藏蓝
+        dot_sz = 8 if many else (11, 9, 8)[lvl]
         rows.append(f'    <text x="{x + 2}" y="{y - 1}" font-size="{dot_sz}" fill="{PRIM}">●</text>')
         rows.append(f'    <text x="{tx}" y="{y}" font-size="{size}">{wrapped}</text>')
         n_lines = wrapped.count('dy=') + 1
-        y += round(size * 1.55) * n_lines + (12 if lvl == 0 else 6)
+        y += (round(19 * 1.35) + 3) * n_lines if many else round(size * 1.45) * n_lines + (10 if lvl == 0 else 7)
         if y > 680:
             break
     return (HEAD.format(role="content") + title_group(meta.get("title") or "") +
@@ -227,8 +247,10 @@ def gen(meta: dict, text_md: str) -> str:
         return keep_page(meta["page"])
     if role == "code":
         return code_page(meta, text_md)
+    if role == "content":
+        return content_page(meta, text_md)  # content 需要文字回退（outline 空时用 text.md）
     return {"cover": cover_page, "toc": toc_page, "section": section_page,
-            "ending": ending_page}.get(role, content_page)(meta)
+            "ending": ending_page}[role](meta)
 
 
 def main() -> int:
