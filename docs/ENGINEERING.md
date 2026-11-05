@@ -208,3 +208,5 @@
 | 38 | 1104 | P12 补黄圈渲染后看不见：椭圆画在 extra（cfg-page 组内先渲染），被 skeleton 后画的块白底矩形盖住——z 序错误且 qc 不查遮挡 | SVG 同组内按文档序绘制，先画者在下；覆盖类元素（圈注/高亮）必须在底层形状之后输出 | 生成器加 overlay 层（skeleton 之后拼装）；qc 不查 z 序遮挡，覆盖元素渲染后必须截图目检（R15 执行项） |
 
 | 39 | 1105 | 值守写入重绘稿后，编辑器（用户开着该页）的自动保存用**内存中的旧贴图版**覆盖新稿（P24/P101 双双被回滚成贴图保底）——值守与编辑器并发写同一 draft 无任何协调 | 工作台并发模型缺口：写稿铁律只防"agent 之间"，没防"agent vs 编辑器自动保存" | 暂行：值守写稿后提醒用户刷新该页（编辑器重新加载最新稿，避免其自动保存旧内容）；正式修复需编辑器侧 mtime 检测（保存前比对，过期则提示刷新）——列入工作台待办 |
+
+| 40 | 1105 | PPT 直改任务（P8~16 重建）：python-pptx+手工 XML 建 extra 卡，`<a:off>` 的 x/y 写成了**两个并列标签**（schema 要求一个标签带 x/y 两属性）——XML 虽 well-formed、python-pptx 能读，但 PowerPoint COM 直接拒开整个文件。靠 12 轮二分（克隆/换字/建卡/删组逐项测）定位到卡 XML | 手写 DrawingML 时元素结构必须对照 schema（off/ext 都是单标签双属性）；"python-pptx 能读"≠"PowerPoint 能开"，PPTX 产出后必须用 PowerPoint COM 试开+导图目检 | 新建 PPT shape 后跑"COM 打开+Slides.Export 截图"作为交付门禁（本项目 R15 的 PPTX 版）；手工 XML 建卡用官方 lxml 模板抄现成 shape 再改属性 |
