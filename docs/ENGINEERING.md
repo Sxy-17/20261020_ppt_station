@@ -210,3 +210,5 @@
 | 39 | 1105 | 值守写入重绘稿后，编辑器（用户开着该页）的自动保存用**内存中的旧贴图版**覆盖新稿（P24/P101 双双被回滚成贴图保底）——值守与编辑器并发写同一 draft 无任何协调 | 工作台并发模型缺口：写稿铁律只防"agent 之间"，没防"agent vs 编辑器自动保存" | 暂行：值守写稿后提醒用户刷新该页（编辑器重新加载最新稿，避免其自动保存旧内容）；正式修复需编辑器侧 mtime 检测（保存前比对，过期则提示刷新）——列入工作台待办 |
 
 | 40 | 1105 | PPT 直改任务（P8~16 重建）：python-pptx+手工 XML 建 extra 卡，`<a:off>` 的 x/y 写成了**两个并列标签**（schema 要求一个标签带 x/y 两属性）——XML 虽 well-formed、python-pptx 能读，但 PowerPoint COM 直接拒开整个文件。靠 12 轮二分（克隆/换字/建卡/删组逐项测）定位到卡 XML | 手写 DrawingML 时元素结构必须对照 schema（off/ext 都是单标签双属性）；"python-pptx 能读"≠"PowerPoint 能开"，PPTX 产出后必须用 PowerPoint COM 试开+导图目检 | 新建 PPT shape 后跑"COM 打开+Slides.Export 截图"作为交付门禁（本项目 R15 的 PPTX 版）；手工 XML 建卡用官方 lxml 模板抄现成 shape 再改属性 |
+
+| 41 | 1105 | 全册 PPTX 审计（对照原版逐页渲染对比）：发现 10 页问题——batch fallback 错乱残稿 5 页（P31/55/60/67/73：多 shape 行被串成单列重复行）、整页缺图 2 页（P27 缺 DFS 树、P80 缺代码卡）、谢谢/备注页被占位成"章节"（P63/64）、文字重叠 1 页（P94 底部行溢出页面）+ Symbol 私有区字符（\uf0ce∈/\uf0c7∩/\uf0c8∪）在 Consolas 下无字形显示空白 | 全册交付前必须"双版渲染逐页对比"（原版 vs 修改版，PowerPoint COM Export PNG）；Symbol PUA 字符必须替换为 Unicode 标准码位；重建内容优先贴原版裁剪图（信息 100% 保真）而非手工重画；python-pptx add_shape 的文字默认继承主题浅色，必须显式设色 | 审计脚本 tmp/audit*（cmp/grid/verify 三级拼图法）；修复脚本 tmp/audit_fix.py |
