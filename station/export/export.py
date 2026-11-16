@@ -155,6 +155,13 @@ def main() -> int:
     if exp.returncode != 0:
         return 4
 
+    # 段落化后处理（R27/段落定律 v3）：br→真回车段落、二级字面圆点→原生 buChar+层级缩进
+    produced_raw = sorted((stage / "exports").glob("*.pptx")) if (stage / "exports").exists() else []
+    if produced_raw:
+        post = subprocess.run([sys.executable, str(ROOT / "station" / "export" / "postprocess_pptx.py"), str(produced_raw[-1])])
+        if post.returncode != 0:
+            print("⚠ 段落化后处理失败（产物保持编译原样）")
+
     produced = sorted((stage / "exports").glob("*.pptx")) if (stage / "exports").exists() else []
     if not produced:
         print("引擎报告成功但没有产物，检查 .export/exports/")
