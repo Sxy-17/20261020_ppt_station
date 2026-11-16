@@ -71,6 +71,14 @@ def main() -> int:
         print(f"没有可导出的 draft.svg（{task_dir}）")
         return 2
 
+    # R26（#42 教训）：零裁决全册导出 = 大概率跳过了工作台审核闸。
+    # 脚本只提醒不拦截——导出发起权在用户（三纪律③），但 agent 必须被这句提醒叫停惯性。
+    verdicts = sum(1 for d in drafts if (d.parent / "verdict.json").exists())
+    if verdicts == 0 and len(drafts) > 1:
+        print(f"⚠ 警告：{len(drafts)} 页全部没有任何裁决（verdict.json）——")
+        print("   正常流程是先开工作台审核（station/server.py）再导出。")
+        print("   若用户已在聊天里明确发起导出，此警告可忽略。")
+
     # staging：引擎期望的项目形态。重建前先点名确认是自己的工作区（R2）
     ensure_engine()
     stage = task_dir / ".export"

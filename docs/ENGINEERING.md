@@ -68,6 +68,10 @@
 
 | R22 | **前端没在浏览器里跑过就不算完成**：commit 前 `node --check station/static/*.js` 全过；每个 UI 里程碑附一张无头浏览器截图（真实任务稿），截图里能看到本次新增的控件；异步渲染后的挂钩必须在新内容落进 DOM 之后执行 | #25：编辑器语法错误连续 7 个 commit 无人发现 |
 
+| R26 | **流程闸门落盘（防接力丢步）**：A 路线每完成一步，把「当前步骤 / 下一道闸」写进 `project.json`（`status` + `next_gate` 字段）；`batch_draft.py` 出稿后的唯一合法下一步 = 起 `server.py` 工作台 + `wait_requests.py` 值守；全册导出必须由用户在聊天里发起（三纪律③），agent 不得把「导出成品」当任务终点——A 路线的阶段性交付物是**审核基础设施**，不是文件；跨模型/跨会话接手第一动作 = 读 `project.json` 决定从哪继续，不凭对话惯性 | #42：换模型三次接力后流程闸门全丢 |
+
+| R27 | **对象保真到页内小元素**：圆点/编号是文字不是图形（与文字同框，禁 circle 充当符号）；非装饰性文字 ≥18pt（SVG 24px，塞不下重排不缩字）；保布局骨架=同占幅（禁 meet 居中缩小、贴图只许 slice 满铺）；段落块=一个文本框+段落回车（`text-model=paragraphs` 四件套，层级缩进用行首 ZWSP+NBSP 字面字符、禁 x 表缩进）；圆点忠实原文，原文无点不得加点——全部 chapter2 P1/P3 用户逐条纠偏实证，写法细节见 SKILL.md Step4 契约 | #43：批量稿五连翻车（缩小/图形圆点/拍平/拆框/字小），一条一条被用户抓回来 |
+
 
 
 ## 二、失误记录
@@ -213,3 +217,7 @@
 | 40 | 1105 | PPT 直改任务（P8~16 重建）：python-pptx+手工 XML 建 extra 卡，`<a:off>` 的 x/y 写成了**两个并列标签**（schema 要求一个标签带 x/y 两属性）——XML 虽 well-formed、python-pptx 能读，但 PowerPoint COM 直接拒开整个文件。靠 12 轮二分（克隆/换字/建卡/删组逐项测）定位到卡 XML | 手写 DrawingML 时元素结构必须对照 schema（off/ext 都是单标签双属性）；"python-pptx 能读"≠"PowerPoint 能开"，PPTX 产出后必须用 PowerPoint COM 试开+导图目检 | 新建 PPT shape 后跑"COM 打开+Slides.Export 截图"作为交付门禁（本项目 R15 的 PPTX 版）；手工 XML 建卡用官方 lxml 模板抄现成 shape 再改属性 |
 
 | 41 | 1105 | 全册 PPTX 审计（对照原版逐页渲染对比）：发现 10 页问题——batch fallback 错乱残稿 5 页（P31/55/60/67/73：多 shape 行被串成单列重复行）、整页缺图 2 页（P27 缺 DFS 树、P80 缺代码卡）、谢谢/备注页被占位成"章节"（P63/64）、文字重叠 1 页（P94 底部行溢出页面）+ Symbol 私有区字符（\uf0ce∈/\uf0c7∩/\uf0c8∪）在 Consolas 下无字形显示空白 | 全册交付前必须"双版渲染逐页对比"（原版 vs 修改版，PowerPoint COM Export PNG）；Symbol PUA 字符必须替换为 Unicode 标准码位；重建内容优先贴原版裁剪图（信息 100% 保真）而非手工重画；python-pptx add_shape 的文字默认继承主题浅色，必须显式设色 | 审计脚本 tmp/audit*（cmp/grid/verify 三级拼图法）；修复脚本 tmp/audit_fix.py |
+
+| 42 | 1116 | chapter2 翻新：113 页初稿一把出完（跳过 SKILL Step4「≤10 页试稿定调」闸）后直接 export.py 全册导出并 commit/push，没开工作台没值守——用户质问「为什么没跳出工作台」 | ①SKILL 被当参考资料抽读：细节规则（R15/R17/QC/NBSP）全执行了，两道结构闸门（试稿、工作台+值守）全跳——通用编程惯性把「交付最终文件」当终点，而本工作区 A 路线终点是审核基础设施；②todo 计划期就把错固化：最后一步是「导出 pptx」，压根没排工作台/值守；③流程状态只活在对话里，会话中途三次换模型接力，新模型只剩「继续产出」惯性，project.json 里没有 next_gate 可接（R16 的流程版缺口） | R26：流程闸门落盘 `project.json`（status+next_gate）；出稿后唯一合法动作 = 工作台+值守；全册导出由用户在聊天里发起；export.py 加零裁决警告（脚本只能提醒不能挡——发起权在用户） |
+
+| 43 | 1117 | chapter2 重绘五连纠偏：①P3 旧稿整页缩进 960×720 居中「整体缩小」②圆点被画成独立 circle 图形（原版与字同框）③段落合并把二级缩进拍平④合并框反复拆成 9 个框（缺 text-model 误诊为嵌套禁令）⑤正文字号 21px<18pt。每条都是用户在工作台/聊天逐条抓回 | 批量稿按「模板硬套」而非「保原版结构」；对象保真清单只管大类不管页内小元素；引擎段落合并契约靠二分实验摸清（text-model+line-height+同 x+直系行四件套，嵌套单层安全）| R27（对象保真到页内小元素，写法细则固化进 SKILL.md Step4 契约与 REDRAW_SPEC）；引擎行为结论回写 station 文档而非口口相传 |

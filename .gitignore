@@ -37,3 +37,5 @@ projects/*/exports/*.pptx
 
 # 导出的成品 pptx 较大，默认不入库（交付时单独打包）
 *.pptx
+# workbuddy 私有运行数据（用户隐私红线，2026-11-17 教训：#44）
+.workbuddy/
