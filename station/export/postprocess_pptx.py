@@ -67,12 +67,18 @@ for item in zin.infolist():
                 t.text = head[mm.end():]
                 old = p.find(a("pPr"))
                 if old is not None:
-                    p.remove(old)
-                ppr = etree.Element(a("pPr"))
-                ppr.set("marL", str(LEVEL2_MARL)); ppr.set("indent", str(LEVEL2_INDENT))
-                bf = etree.SubElement(ppr, a("buFont")); bf.set("typeface", "Microsoft YaHei")
-                bc = etree.SubElement(ppr, a("buChar")); bc.set("char", "·")
-                p.insert(0, ppr)
+                    # 保留引擎 pPr（lnSpc 行距等），只覆写缩进与符号
+                    old.set("marL", str(LEVEL2_MARL)); old.set("indent", str(LEVEL2_INDENT))
+                    if old.find(a("buChar")) is None:
+                        bf = etree.SubElement(old, a("buFont")); bf.set("typeface", "Microsoft YaHei")
+                        bc = etree.SubElement(old, a("buChar")); bc.set("char", "·")
+                    ppr = old
+                else:
+                    ppr = etree.Element(a("pPr"))
+                    ppr.set("marL", str(LEVEL2_MARL)); ppr.set("indent", str(LEVEL2_INDENT))
+                    bf = etree.SubElement(ppr, a("buFont")); bf.set("typeface", "Microsoft YaHei")
+                    bc = etree.SubElement(ppr, a("buChar")); bc.set("char", "·")
+                    p.insert(0, ppr)
             else:
                 t.text = head.replace("\u200b", "")
         xml = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
