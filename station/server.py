@@ -106,6 +106,9 @@ def workbench_image(name: str, fn: str):
     else:
         f = d / "images" / fn
     if not f.exists():
+        # 与 export.py staging 的兜底同步：页级图缺失时回落任务级 images/（v4 统一存图位）
+        f = d / "images" / fn
+    if not f.exists():
         return jsonify({"error": "图片不存在"}), 404
     return send_file(f)
 
