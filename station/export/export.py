@@ -151,7 +151,9 @@ def main() -> int:
         return 3  # 质检不过就停——绝不带病导出（先修 SVG）
 
     print("▶ 编译 svg_to_pptx …")
-    exp = run_engine("svg_to_pptx.py", [stage, "--quick-generate", "--no-notes"])
+    # --reflow-text：dy 堆叠的同 x 行合并进一个可编辑文本框（段落定律：一段一框多段落），
+    # 行首 tspan 带 data-paragraph-soft-break="0" 强制新段落（层级 bullet 各自成段）
+    exp = run_engine("svg_to_pptx.py", [stage, "--quick-generate", "--no-notes", "--reflow-text"])
     if exp.returncode != 0:
         return 4
 
