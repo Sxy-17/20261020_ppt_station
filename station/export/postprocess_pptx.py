@@ -30,7 +30,10 @@ LEVEL2_MARL, LEVEL2_INDENT = 342900, -342900   # v2 chapter2 方言
 L1_MARL, L1_LVL = 742950, "2"                  # v3 二级（示范页实测）
 L2_MARL, L2_LVL = 1257300, "4"                 # v3 三级
 BU_COLOR = "1F4E79"
-BULLET_RE = re.compile(r"^(•\u00A0*|–\u3000*)")  # 行首标记：• 或 –+全角空格×n
+BULLET_RE = re.compile(r"^((?:　| )*)(?:• *|–　*)")  # 行首标记：[前导空白]•或–
+LEAD_NBSP_PX = 14.5   # NBSP 估宽（22px 字号）
+LEAD_FULL_PX = 29.0   # 全角空格估宽
+LEAD_STEP_PX = 48.0   # 每级缩进步长
 
 # CT_TextParagraphProperties 子元素法定顺序（OOXML schema）——注入必须按此序
 PPR_ORDER = [a(x) for x in (
@@ -91,19 +94,10 @@ def _strip_marker(p):
     m = BULLET_RE.match(t0.text or "")
     if not m:
         return None, False
-    head = m.group(0)
-    if head.startswith("•"):
-        lvl = 0
-    else:
-        n = len(head) - 1  # 去 “–” 本身，余下全是全角空格
-        if n == 0:
-            # 空格在下一个 run（bullet 独立 tspan 写法）：预读
-            nxt = runs[1].find(a("t")) if len(runs) > 1 else None
-            n = len((nxt.text or "")) - len((nxt.text or "").lstrip("\u3000")) if nxt is not None else 0
-        lvl = 1 if n == 1 else (2 if n >= 2 else None)
-        if lvl is None:
-            return None, False
-    rest = (t0.text or "")[len(head):]
+    lead, head = m.group(1), m.group(0)
+    lead_px = lead.count("　") * LEAD_FULL_PX + lead.count(" ") * LEAD_NBSP_PX
+    lvl = min(2, round(lead_px / LEAD_STEP_PX))
+    rest = (t0.text or "")[m.end():]
     if rest:
         t0.text = rest
     else:
@@ -218,6 +212,23 @@ for item in zin.infolist():
             if id(body_el) in touched_bodies:
                 _append_tail_empty(body_el)
                 stats["tail"] += 1
+        # 4.5) 黄字=高亮信号：fill FFE066 的 run → a:highlight FFE066，字色恢复继承
+        for r in root.iter(a("r")):
+            rPr = r.find(a("rPr"))
+            if rPr is None:
+                continue
+            sf = rPr.find(a("solidFill"))          # 直接子
+            fill = sf.find(a("srgbClr")) if sf is not None else None
+            if fill is not None and (fill.get("val") or "").upper() == "FFE066":
+                rPr.remove(sf)                     # 删直接子（原先是删孙节点 → ValueError）
+                hl = etree.Element(a("highlight"))
+                etree.SubElement(hl, a("srgbClr")).set("val", "FFE066")
+                # highlight 在 rPr 子元素序中位于 latin 之前（lnSpc 无关）：插在 solidFill 原位附近
+                latin = rPr.find(a("latin"))
+                if latin is not None:
+                    latin.addprevious(hl)
+                else:
+                    rPr.append(hl)
         # 5) 残余 ZWSP 全清（v2 行为）
         for t in root.iter(a("t")):
             if t.text and "\u200b" in t.text:
