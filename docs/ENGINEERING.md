@@ -227,3 +227,5 @@
 | 43 | 1117 | chapter2 重绘五连纠偏：①P3 旧稿整页缩进 960×720 居中「整体缩小」②圆点被画成独立 circle 图形（原版与字同框）③段落合并把二级缩进拍平④合并框反复拆成 9 个框（缺 text-model 误诊为嵌套禁令）⑤正文字号 21px<18pt。每条都是用户在工作台/聊天逐条抓回 | 批量稿按「模板硬套」而非「保原版结构」；对象保真清单只管大类不管页内小元素；引擎段落合并契约靠二分实验摸清（text-model+line-height+同 x+直系行四件套，嵌套单层安全）| R27（对象保真到页内小元素，写法细则固化进 SKILL.md Step4 契约与 REDRAW_SPEC）；引擎行为结论回写 station 文档而非口口相传 |
 
 | 44 | 1117 | `git add -A` 把 `.workbuddy/memory/*.md`（用户私有记忆）推进远程（bd3fa38），用户震怒要求永久清除。已软重置重建干净历史+force push 刷掉；.gitignore 补 `.workbuddy/` | .gitignore 红线清单漏了 `.workbuddy/`；且 `add -A` 盲提交不核对暂存清单——隐私文件靠「事后发现」而非「事前拦截」| R28：**提交前必须核对暂存清单**（`git status --short` 逐项过目，禁盲用 `add -A`）；`.gitignore` 红线目录清单化维护（.workbuddy/ 已入）；push 后抽查 `git ls-files` 确认无隐私路径 |
+
+| 42 | 1123 | ch3 原生直出 SVG 方言：行首 tspan 只写 dy 不写 x → 浏览器/工作台按 SVG 光标规则从上一行行尾续排，整页阶梯状右移（用户截图发现）；此前多轮截图目检因小尺寸网格未识别 | SVG 多行文本的铁律：**每个行首（换行）tspan 必须显式带 x=文本框 x**，只许 dy 表行距；导出 PPTX 不暴露此错（reflow 走段落属性），只有 SVG 渲染侧暴露——"审核所见=导出所得"在文本布局层同样成立 | 方言写入 other-native-pptx-workflow.md 与 SKILL.md §3.5；渲染侧程序化验证法：chrome 截图 + 逐行带最左墨迹 x 像素分析（无需视觉模型） |
