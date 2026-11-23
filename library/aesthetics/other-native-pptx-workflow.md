@@ -108,3 +108,61 @@ supersedes: ""
 - 引擎绕行提示：若仍走 svg_to_pptx，需 `--reflow-text` +
   `<tspan data-paragraph-soft-break="0">` 强制分段 + `data-pptx-frame` 声明框宽，
   否则一行一框/长行折行（chapter3 P1 实测）；原生直出路线无此坑。
+
+## 7. SVG 预览方言（工作台可审的中间层，2026-11-23 ch3 P1 验收）
+
+工作台审核对象是 draft.svg——文字列表页在不走原生直出脚本时（或需要工作台展示时），
+用本节方言写 SVG，导出后仍能得到 §3 的原生段落结构。
+
+### 7.1 四层机制（PPT 原生属性 ↔ SVG 等价物）
+
+| PPT 原生属性 | SVG 等价物 | 层 |
+|---|---|---|
+| sz=2600（字号） | font-size="26"/"22"（px） | 像素常量 |
+| lnSpc 150% | dy="52"（固定行高） | 像素常量 |
+| marL/indent 悬挂缩进（bullet 位 42/96px） | 行首前导 NBSP×3 / ×7 | 字面字符 |
+| 文字起点 marL | bullet 后全角空格×1 | 字面字符 |
+| buChar •/–（buClr 1F4E79，125%） | 字面 •/–（着色 tspan，字号×1.25） | 字面字符 |
+| 段落独立 a:p | data-paragraph-soft-break="0" | 属性标记 |
+| 段落属性本身 | postprocess v3.1 剥标记→注原生属性 | 后处理 |
+
+### 7.2 方言模板（逐要素）
+
+```svg
+<text x="95" y="185" font-size="26"
+  data-pptx-frame="90 150 1110 420" data-pptx-text-baseline="metrics-v1">
+  <tspan font-size="32.5" fill="#1F4E79">• </tspan><tspan font-size="26">一级行</tspan>
+  <tspan x="95" data-paragraph-soft-break="0" dy="52" font-size="22"
+    fill="#1F4E79">   –　</tspan><tspan font-size="22">二级行</tspan>
+  <tspan x="95" data-paragraph-soft-break="0" dy="52" font-size="22"
+    fill="#1F4E79">       –　</tspan><tspan font-size="22">三级行</tspan>
+</text>
+```
+
+- bullet（•/–）与层级缩进（前导 NBSP×3/×7）都是**字面字符**，可见可审；
+  一级 bullet 字号 ×1.25（模拟 buSzPct 125%）。
+- **每个行首 tspan 必须带 x=父 text 的 x**：只写 dy 会从上一行行尾续排，
+  整页阶梯右移（#42；浏览器/工作台必现，PPTX 侧反而看不出）。
+- `data-paragraph-soft-break="0"` 强制独立段落：不写时引擎按"行距聚类+同字号+
+  非列表符"启发式判定，➢/– 等符号行会被误并进上一段。
+- `data-pptx-frame="x y w h"` 显式框宽（w ≥ 最长行估宽+60）：缺失时按估算行宽
+  折行竖排。`data-pptx-text-baseline="metrics-v1"` 保持基线一致。
+- 行内强调（红字/加粗/Consolas）用**非定位 tspan**（无 x/y/dy）；
+  黄底高亮 = 文字前独立 `<rect fill="#FFE066">`（z 序在下）。
+- 字面标记在导出时由 postprocess v3.1 剥净转原生——SVG 里它们是文字
+  （工作台编辑会选中），导出后是原生 bullet，这是中间形式固有形态。
+
+### 7.3 验证（双道，每页必做）
+
+1. **结构回读**：导出件 `[pa.text for pa in paras] == 源树文字列表` 逐字比对 +
+   buChar/marL/lvl 抽查 + 行首标记残留计数（应为 0；原文正文自带连接符不算）。
+2. **像素带检查**（无需视觉模型）：COM 导出 PNG → 逐行带找最左墨迹 x
+   （应全部对齐文本框 x，无阶梯）；逐行带找最左蓝色像素 x
+   （bullet 位应随层级 95→137→191 递增）。
+
+### 7.4 工具链（已入库）
+
+- 生成器：`station/prep/gen_native_list_svg.py <task_dir> --pages 11,12,...`
+  （代码层提取→方言 SVG→write_draft mtime 保护写入；强调映射 --emphasis-file JSON）
+- 转换+后处理：`station/export/export.py`（已接 --reflow-text + postprocess v3.1）
+- 手写图形页的流程图/卡片元素仍按 §5 例外处理（独立 shape + 规范字体字号）。
