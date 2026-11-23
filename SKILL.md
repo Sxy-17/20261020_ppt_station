@@ -81,6 +81,11 @@ metadata:
 行距 150%、雅黑 L0=26/L1+=22、中英拆 run）。图形页单独处理（贴图或另绘）。
 完整五步流程、段落 XML 属性值、颜色/字体/字号表、铁律：
 **`library/aesthetics/other-native-pptx-workflow.md`**（2026-11-23 chapter3 P2 用户示范验收）。
+该文件 §7 另含 **SVG 预览方言**（工作台可审的中间层：一个 `<text>` 多 tspan、
+行首 tspan 必须带 x、`data-paragraph-soft-break="0"` 分段、前导 NBSP 编码 bullet 缩进、
+`data-pptx-frame` 声明框宽），配生成器 `station/prep/gen_native_list_svg.py`
+（代码层段落树→方言 SVG，内置 write_draft mtime 保护）与
+`station/export/postprocess_pptx.py` v3.1（标记→原生 bullet 转换）。
 
 **素材边界规则（防语义污染）**：素材范围 = 当前 inbox + 用户点名路径；
 绝不私自翻 `projects/` 旧任务素材；被消费素材即搬入本任务 `materials/`；
