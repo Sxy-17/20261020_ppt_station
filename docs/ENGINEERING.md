@@ -229,3 +229,7 @@
 | 44 | 1117 | `git add -A` 把 `.workbuddy/memory/*.md`（用户私有记忆）推进远程（bd3fa38），用户震怒要求永久清除。已软重置重建干净历史+force push 刷掉；.gitignore 补 `.workbuddy/` | .gitignore 红线清单漏了 `.workbuddy/`；且 `add -A` 盲提交不核对暂存清单——隐私文件靠「事后发现」而非「事前拦截」| R28：**提交前必须核对暂存清单**（`git status --short` 逐项过目，禁盲用 `add -A`）；`.gitignore` 红线目录清单化维护（.workbuddy/ 已入）；push 后抽查 `git ls-files` 确认无隐私路径 |
 
 | 42 | 1123 | ch3 原生直出 SVG 方言：行首 tspan 只写 dy 不写 x → 浏览器/工作台按 SVG 光标规则从上一行行尾续排，整页阶梯状右移（用户截图发现）；此前多轮截图目检因小尺寸网格未识别 | SVG 多行文本的铁律：**每个行首（换行）tspan 必须显式带 x=文本框 x**，只许 dy 表行距；导出 PPTX 不暴露此错（reflow 走段落属性），只有 SVG 渲染侧暴露——"审核所见=导出所得"在文本布局层同样成立 | 方言写入 other-native-pptx-workflow.md 与 SKILL.md §3.5；渲染侧程序化验证法：chrome 截图 + 逐行带最左墨迹 x 像素分析（无需视觉模型） |
+
+| 43 | 1123 | svg_to_pptx 单批 ≥31 页产物损坏（slide part/rels 不全，python-pptx 报 rId 缺失、PowerPoint 拒开）；≤20 页批次正常 | 引擎大批量编译的 part 命名/关系 bug（未深究，上游问题）；全册导出前必须 python-pptx 回读页数 + COM 试开 | export.py 分批 ≤20 页 + PowerPoint COM `Slides.InsertFromFile` 合并（注意 SlideEnd 必须用源页数，不能传 999） |
+| 44 | 1123 | 生成器 run 级升级后，段落**首行 tspan 没带 x/dy**（只有 bullet 带了 x）→ 第二段起全叠在首行基线；多轮截图目检（4 宫格缩略）没看出来 | 行首 tspan 的 x/dy 规则对**每个段落首行**同样成立（i>0 时必须 `x=... data-paragraph-soft-break="0" dy=...`），不是只对折行续行 | row_tspan 统一用 pos 变量：i==0 无属性、否则 x+soft+dy；缩略图目检 ≤4 宫格且每格 ≥640px，重叠类缺陷放大单页看 |
+| 45 | 1123 | 值守 `--done` 批量标完成后用户重按 redraw，pending_requests.jsonl 里 working 条目堆积到 50 条/46 页无人处理——值守循环只看"新意见"不盘点存量 | 值守进入时必须先 dump 全部 working/pending 存量再处理增量；"agent 正在改这页"是用户可见的承诺，不能靠单次 `--done` 一刀切 | 值守开场固定动作：`jsonl` 存量盘点 → 逐页核对 draft 实况 → 处理 → 批量 done |

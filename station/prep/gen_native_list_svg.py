@@ -50,11 +50,12 @@ def esc(t: str) -> str:
     return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def extract_tree(src_pptx: Path, page: int):
-    """代码层提取段落树：[(lvl, text), ...]（空段跳过）+ 标题文字。
+def extract_tree(src_pptx, page):
+    """代码层提取段落树（run 级颜色）：[(lvl, [(text, color|None), ...]), ...] + 标题。
 
     标题判定不靠 shape 名（ch3 原版多页标题叫 Rectangle 2）：取 y<1.2in 的
     第一个含文字 shape。段落文本清理 VT 控制符（原 PPT 竖排换行）。
+    红字等强调从 run 的 color 取——原生 PPT 的强调必须在 SVG 方言里保留。
     """
     from pptx import Presentation
 
@@ -72,16 +73,49 @@ def extract_tree(src_pptx: Path, page: int):
             top_in = 9
         is_title = (not title_taken) and top_in < 1.2
         for para in sh.text_frame.paragraphs:
-            text = "".join(r.text for r in para.runs)
-            text = text.replace(chr(11), " ")
+            runs = []
+            for r in para.runs:
+                t = r.text.replace(chr(11), " ")
+                if not t:
+                    continue
+                color = None
+                try:
+                    if r.font.color is not None and r.font.color.type is not None and r.font.color.rgb is not None:
+                        color = "#" + str(r.font.color.rgb)
+                except Exception:
+                    color = None
+                runs.append((t, color))
+            text = "".join(t for t, _ in runs)
             if not text.strip():
                 continue
+            item = (para.level, runs)
             if is_title and title is None:
                 title = text.strip()
                 title_taken = True
             else:
-                tree.append((para.level, text))
+                tree.append(item)
     return title, tree
+
+def runs_to_tspans(runs, sz, extra="", hang=""):
+    """run 列表 → tspan 串：带色 run 单独 tspan，其余合并。"""
+    out, buf, buf_color = [], "", None
+    def flush():
+        nonlocal buf
+        if buf:
+            attr = f' fill="{buf_color}"' if buf_color else ""
+            out.append(f'<tspan font-size="{sz}"{attr}{extra}>{esc(hang + buf)}</tspan>')
+            buf = ""
+    for t, c in runs:
+        c_up = c.upper() if c else None
+        if c_up != buf_color:
+            flush()
+            buf_color = c_up
+        buf += t
+    flush()
+    if not out:
+        out.append(f'<tspan font-size="{sz}"{extra}>{esc(hang)}</tspan>')
+    return "".join(out)
+
 
 def wrap_cjk(text, max_chars):
     """按显示宽折行：CJK 1 字宽、Latin 0.55 字宽。返回行列表。"""
@@ -127,6 +161,8 @@ def line_tspan(lvl, text, first, extra="", dense=False, col_w=48):
 def frame_w(tree, emphasis):
     widest = 0
     for lvl, text in tree:
+        if not isinstance(text, str):
+            text = "".join(t for t, _ in text)
         ex = emphasis.get(text, "")
         fs = SZ0 if lvl == 0 else SZ1
         w = sum((34 if ord(c) > 0x2E80 else 21) for c in text) * (fs / SZ1) \
@@ -138,16 +174,36 @@ def frame_w(tree, emphasis):
 def build_svg(title, tree, emphasis, start_y=185, col_w=48):
     """先按 col_w 预折行统计实际行数，再判定布局（单栏/dense/两栏），最后生成。"""
     # 1) 预折行：每个源段落 → [(lvl, seg, is_first_row, extra), ...]
+    def norm_item(it):
+        """兼容旧 (lvl, text) 与新 (lvl, [(text,color),...]) 两种树节点。"""
+        lvl, payload = it
+        if isinstance(payload, str):
+            return lvl, [(payload, None)]
+        return lvl, payload
+
+    def split_runs(runs, max_chars):
+        """按显示宽把 run 列表切成多行；每行仍是 [(text,color),...]。"""
+        rows, cur, w = [], [], 0.0
+        for t, c in runs:
+            for ch in t:
+                cw = 1.0 if ord(ch) > 0x2E80 else 0.55
+                if w + cw > max_chars and cur:
+                    rows.append(cur); cur, w = [], 0.0
+                if cur and cur[-1][1] == c:
+                    cur[-1] = (cur[-1][0] + ch, c)
+                else:
+                    cur.append((ch, c))
+                w += cw
+        if cur:
+            rows.append(cur)
+        return rows or [[]]
+
     def fold_tree(cw_):
         rows = []
-        for lvl, text in tree:
-            extra = ""
-            if text == "幺模变换":
-                extra = ' font-weight="bold"'
-            elif text == "向量化":
-                extra = ' font-weight="bold" fill="#FF0000"'
-            for i, seg in enumerate(wrap_cjk(text, max(8, cw_ - 8))):
-                rows.append((lvl, seg, i == 0, extra))
+        for it in tree:
+            lvl, runs = norm_item(it)
+            for i, seg_runs in enumerate(split_runs(runs, max(8, cw_ - 8))):
+                rows.append((lvl, seg_runs, i == 0, ""))
         return rows
 
     rows = fold_tree(col_w)
@@ -163,22 +219,25 @@ def build_svg(title, tree, emphasis, start_y=185, col_w=48):
 
     # 2) 行 tspan 生成（x 按「栏起点 + 层级缩进」；段间首行带 bullet，折行续行悬挂）
     def row_tspan(i, col_x):
-        lvl, seg, is_first_row, extra = rows[i]
+        lvl, seg_runs, is_first_row, extra = rows[i]
         x = col_x + (0 if lvl == 0 else (42 if lvl == 1 else 96))
         soft = "" if is_first_row else ' data-paragraph-soft-break="0"'
-        new_row = is_first_row or (two_col and i == half)
-        dy = "" if (i == 0 or (two_col and i == half)) else f' dy="{dyv(lvl)}"'
+        dy = "" if i == 0 else f' dy="{dyv(lvl)}"'
         sz = SZ0 if lvl == 0 else SZ1
-        pPr_parts = f'x="{x}"{soft}{dy}'
         if is_first_row:
             lead = LEAD.get(lvl, LEAD[2])
+            # 段落首行也必须带 x/dy（i>0 时）：否则第二段起全叠在首行基线（#44）
+            pos = f' x="{x}"' if i == 0 else f' x="{x}"{soft}{dy}'
             if lvl == 0:
                 bu_sz = f"{SZ0 * 1.25:.0f}"
-                return (f'<tspan x="{x}" font-size="{bu_sz}" fill="#1F4E79">•\u00a0</tspan>'
-                        f'<tspan font-size="{sz}"{extra}>{esc(seg)}</tspan>')
-            return (f'<tspan x="{x}" font-size="{sz}" fill="#1F4E79">'
-                    f'{lead}–\u3000</tspan><tspan font-size="{sz}"{extra}>{esc(seg)}</tspan>')
-        return (f'<tspan {pPr_parts} font-size="{sz}"{extra}>　{esc(seg)}</tspan>')
+                return (f'<tspan{pos} font-size="{bu_sz}" fill="#1F4E79">•\u00a0</tspan>'
+                        + runs_to_tspans(seg_runs, sz))
+            return (f'<tspan{pos} font-size="{sz}" fill="#1F4E79">{lead}–\u3000</tspan>'
+                    + runs_to_tspans(seg_runs, sz))
+        hang = "\u3000" * (2 if lvl == 1 else 4)
+        return (f'<tspan x="{x}"{soft}{dy} font-size="{sz}">{hang}</tspan>'
+                + runs_to_tspans(seg_runs, sz))
+
 
     def frame_text(x, y, w, h, body_lines):
         body = "\n      ".join(body_lines)
